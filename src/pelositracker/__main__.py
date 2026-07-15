@@ -14,7 +14,7 @@ import sys
 import urllib.error
 from pathlib import Path
 
-from . import api, clerk, config, db, fetcher
+from . import api, clerk, config, db, fetcher, watchlists
 from .api import DISCLAIMER
 from .pipeline import ingest_house_records, ingest_records, ingest_senate_filings
 
@@ -83,6 +83,43 @@ def _cmd_stats(args: argparse.Namespace) -> int:
         conn.close()
 
 
+def _cmd_watch(args: argparse.Namespace) -> int:
+    conn = db.connect(args.db)
+    try:
+        db.init_schema(conn)
+        if args.watch_command == "add":
+            try:
+                if args.ticker is not None:
+                    entry_id = watchlists.add_ticker(conn, args.ticker)
+                else:
+                    entry_id = watchlists.add_politician(conn, args.politician_id)
+            except ValueError as exc:
+                print(exc, file=sys.stderr)
+                return 1
+            print(f"added watchlist entry {entry_id}")
+        elif args.watch_command == "list":
+            entries = watchlists.list_watchlists(conn)
+            if not entries:
+                print("watchlist is empty")
+            for entry in entries:
+                if entry["kind"] == "ticker":
+                    target = str(entry["ticker"])
+                else:
+                    target = f"{entry['politician_name']} (id {entry['politician_id']})"
+                print(
+                    f"{entry['id']:>4}  {entry['kind']:<10} {target}"
+                    f"  added {entry['created_at']}"
+                )
+        else:  # remove
+            if not watchlists.remove_watchlist(conn, args.watch_id):
+                print(f"no watchlist entry {args.watch_id}", file=sys.stderr)
+                return 1
+            print(f"removed watchlist entry {args.watch_id}")
+        return 0
+    finally:
+        conn.close()
+
+
 def _cmd_serve(args: argparse.Namespace) -> int:
     api.serve(args.db)
     return 0
@@ -103,6 +140,17 @@ def main(argv: list[str] | None = None) -> int:
 
     serve = subparsers.add_parser("serve", help="Run the local read-only query API")
     serve.set_defaults(func=_cmd_serve)
+
+    watch = subparsers.add_parser("watch", help="Manage watchlist entries")
+    watch_sub = watch.add_subparsers(dest="watch_command", required=True)
+    watch_add = watch_sub.add_parser("add", help="Watch a ticker or politician")
+    add_target = watch_add.add_mutually_exclusive_group(required=True)
+    add_target.add_argument("--ticker")
+    add_target.add_argument("--politician-id", type=int, dest="politician_id")
+    watch_sub.add_parser("list", help="List watchlist entries")
+    watch_remove = watch_sub.add_parser("remove", help="Remove a watchlist entry")
+    watch_remove.add_argument("watch_id", type=int)
+    watch.set_defaults(func=_cmd_watch)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

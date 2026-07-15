@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, quote, urlsplit
 
+from .watchlists import list_watchlists
+
 DISCLAIMER = (
     "PelosiTracker displays public STOCK Act disclosure data. Filings may lag "
     "trades by up to 45 days and report amount ranges, not exact values. "
@@ -223,6 +225,8 @@ class _ApiHandler(BaseHTTPRequestHandler):
                 return 200, {"count": len(trades), "trades": trades}, {}
             if route == ["politicians"]:
                 return 200, {"politicians": _list_politicians(conn)}, {}
+            if route == ["watchlists"]:
+                return 200, {"watchlists": list_watchlists(conn)}, {}
             if len(route) == 2 and route[0] == "politicians":
                 try:
                     politician_id = int(route[1])
