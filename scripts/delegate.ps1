@@ -16,6 +16,7 @@ if (-not (Test-Path $PromptFile)) {
 $prompt = Get-Content -Path $PromptFile -Raw
 $outDir = Split-Path -Parent $OutFile
 if ($outDir -and -not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }
+$outFileAbs = Join-Path (Get-Location) $OutFile
 
 Write-Host "[vader] Dispatching $((Get-Item $PromptFile).Length) bytes to agy..."
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -25,14 +26,25 @@ $sw = [System.Diagnostics.Stopwatch]::StartNew()
 # --new-project: every dispatch is a fresh session — without it agy resumes
 # prior conversation state and anchors to stale draft workspaces instead of
 # the prompt.
-if ($Model) {
-    $result = agy --new-project --model $Model --print-timeout 10m -p $prompt 2>&1
-} else {
-    $result = agy --new-project --print-timeout 10m -p $prompt 2>&1
+# Isolation (post-incident): agy runs from a fresh empty temp directory with
+# --sandbox, never from the repo — a prior dispatch run from the repo cwd
+# wrote into the repo and created unauthorized commits. Only the printed
+# draft captured in -OutFile is ever reviewed.
+$isolation = Join-Path ([System.IO.Path]::GetTempPath()) ("vader-dispatch-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $isolation | Out-Null
+Push-Location $isolation
+try {
+    if ($Model) {
+        $result = agy --sandbox --new-project --model $Model --print-timeout 10m -p $prompt 2>&1
+    } else {
+        $result = agy --sandbox --new-project --print-timeout 10m -p $prompt 2>&1
+    }
+} finally {
+    Pop-Location
 }
 
 $sw.Stop()
-$result | Out-File -FilePath $OutFile -Encoding utf8
+$result | Out-File -FilePath $outFileAbs -Encoding utf8
 
 Write-Host "[vader] Done in $($sw.Elapsed.TotalSeconds.ToString('0.0'))s -> $OutFile"
 Write-Host "[vader] REMINDER: output is an untrusted draft. Run the fable-gate before commit."
