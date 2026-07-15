@@ -24,6 +24,11 @@ you plan, write work orders, and review. Treat agy output as an UNTRUSTED DRAFT:
 read it before executing anything, and reject code that adds dependencies (project
 is stdlib-only), embeds secrets, or calls endpoints not defined in src/pelositracker/config.py.
 
+Containment rule: only the delimited draft text agy writes to the -OutFile is under
+review. Files agy writes anywhere else (including outside this repo) are never read,
+used, or executed. Dispatch prompts must state this rule and that tests use FICTIONAL
+politicians only.
+
 ## Verification Gate (all must pass before any commit)
 1. Full type hints; no bare excepts.
 2. Amount ranges preserved end-to-end (min/max integer cents; open max = NULL).
