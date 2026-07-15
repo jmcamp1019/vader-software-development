@@ -5,6 +5,7 @@ Usage:
     python -m pelositracker ingest --source house
     python -m pelositracker ingest --source senate
     python -m pelositracker stats [--db pelositracker.db]
+    python -m pelositracker serve
 """
 from __future__ import annotations
 
@@ -13,14 +14,9 @@ import sys
 import urllib.error
 from pathlib import Path
 
-from . import clerk, config, db, fetcher
+from . import api, clerk, config, db, fetcher
+from .api import DISCLAIMER
 from .pipeline import ingest_house_records, ingest_records, ingest_senate_filings
-
-DISCLAIMER = (
-    "PelosiTracker displays public STOCK Act disclosure data. Filings may lag "
-    "trades by up to 45 days and report amount ranges, not exact values. "
-    "Informational only — not investment advice."
-)
 
 
 def _cmd_ingest(args: argparse.Namespace) -> int:
@@ -87,6 +83,11 @@ def _cmd_stats(args: argparse.Namespace) -> int:
         conn.close()
 
 
+def _cmd_serve(args: argparse.Namespace) -> int:
+    api.serve(args.db)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pelositracker")
     parser.add_argument("--db", default=config.DEFAULT_DB_PATH, help="SQLite database path")
@@ -99,6 +100,9 @@ def main(argv: list[str] | None = None) -> int:
 
     stats = subparsers.add_parser("stats", help="Show database summary")
     stats.set_defaults(func=_cmd_stats)
+
+    serve = subparsers.add_parser("serve", help="Run the local read-only query API")
+    serve.set_defaults(func=_cmd_serve)
 
     args = parser.parse_args(argv)
     return int(args.func(args))
