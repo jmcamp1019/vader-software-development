@@ -1,0 +1,41 @@
+[
+  {
+    "transaction_date": "04/06/2026",
+    "disclosure_date": "05/14/2026",
+    "owner": "Spouse",
+    "ticker": "TSLA",
+    "asset_description": "Tesla Inc - TEST DATA",
+    "asset_type": "Stock",
+    "type": "Sale (Full)",
+    "amount": "$100,001 - $250,000",
+    "comment": "--",
+    "senator": "Fixture, Ima (Test)",
+    "ptr_link": "https://efdsearch.senate.gov/search/view/ptr/TEST-1001/"
+  },
+  {
+    "transaction_date": "04/08/2026",
+    "disclosure_date": "05/14/2026",
+    "owner": "Self",
+    "ticker": "MSFT",
+    "asset_description": "Microsoft Corporation - TEST DATA",
+    "asset_type": "Stock",
+    "type": "Purchase",
+    "amount": "$1,001 - $15,000",
+    "comment": "--",
+    "senator": "Fixture, Ima (Test)",
+    "ptr_link": "https://efdsearch.senate.gov/search/view/ptr/TEST-1002/"
+  },
+  {
+    "transaction_date": "04/09/2026",
+    "disclosure_date": "05/15/2026",
+    "owner": "Self",
+    "ticker": "--",
+    "asset_description": "Corporate Bond Ladder - TEST DATA",
+    "asset_type": "Corporate Bond",
+    "type": "Exchange",
+    "amount": "$250,001 - $500,000",
+    "comment": "--",
+    "senator": "Placeholder, Sam (Test)",
+    "ptr_link": "https://efdsearch.senate.gov/search/view/ptr/TEST-1003/"
+  }
+]

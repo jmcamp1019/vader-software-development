@@ -1,0 +1,82 @@
+[
+  {
+    "first_name": "Ima",
+    "last_name": "Fixture (Test)",
+    "office": "Fixture, Ima (Test) (Senator)",
+    "ptr_link": "https://efdsearch.senate.gov/search/view/ptr/TEST-2001/",
+    "date_recieved": "05/14/2026",
+    "transactions": [
+      {
+        "transaction_date": "04/06/2026",
+        "owner": "Spouse",
+        "ticker": "TSLA",
+        "asset_description": "Tesla Inc - TEST DATA",
+        "asset_type": "Stock",
+        "type": "Sale (Full)",
+        "amount": "$100,001 - $250,000",
+        "comment": "--"
+      },
+      {
+        "transaction_date": "04/08/2026",
+        "owner": "Self",
+        "ticker": "MSFT",
+        "asset_description": "Microsoft Corporation - TEST DATA",
+        "asset_type": "Stock",
+        "type": "Purchase",
+        "amount": "$1,001 - $15,000",
+        "comment": "--"
+      }
+    ],
+    "bioguide": "T001Test"
+  },
+  {
+    "first_name": "Sam",
+    "last_name": "Placeholder (Test)",
+    "office": "Placeholder, Sam (Test) (Senator)",
+    "ptr_link": "",
+    "date_recieved": "",
+    "transactions": [
+      {
+        "transaction_date": "04/09/2026",
+        "owner": "Self",
+        "ticker": "--",
+        "asset_description": "Corporate Bond Ladder - TEST DATA",
+        "asset_type": "Corporate Bond",
+        "type": "Exchange",
+        "amount": "$250,001 - $500,000",
+        "comment": "--"
+      }
+    ],
+    "bioguide": "P002Test"
+  },
+  {
+    "first_name": "Robin",
+    "last_name": "Badrecord (Test)",
+    "office": "Badrecord, Robin (Test) (Senator)",
+    "ptr_link": "https://efdsearch.senate.gov/search/view/ptr/TEST-2003/",
+    "date_recieved": "05/16/2026",
+    "transactions": [
+      {
+        "transaction_date": "04/10/2026",
+        "owner": "Self",
+        "ticker": "AAPL",
+        "asset_description": "Apple Inc - TEST DATA",
+        "asset_type": "Stock",
+        "type": "not_a_real_type",
+        "amount": "$1,001 - $15,000",
+        "comment": "--"
+      },
+      {
+        "transaction_date": "04/11/2026",
+        "owner": "Self",
+        "ticker": "GOOG",
+        "asset_description": "Alphabet Inc - TEST DATA",
+        "asset_type": "Stock",
+        "type": "Purchase",
+        "amount": "$1,001 - $15,000",
+        "comment": "--"
+      }
+    ],
+    "bioguide": "B003Test"
+  }
+]

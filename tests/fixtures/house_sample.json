@@ -1,0 +1,58 @@
+[
+  {
+    "disclosure_year": 2026,
+    "disclosure_date": "05/12/2026",
+    "transaction_date": "2026-04-02",
+    "owner": "joint",
+    "ticker": "MSFT",
+    "asset_description": "Microsoft Corporation - TEST DATA",
+    "type": "purchase",
+    "amount": "$15,001 - $50,000",
+    "representative": "Hon. Testa Fixture",
+    "district": "ZZ00",
+    "ptr_link": "https://disclosures-clerk.house.gov/ptr/TEST-0001",
+    "cap_gains_over_200_usd": false
+  },
+  {
+    "disclosure_year": 2026,
+    "disclosure_date": "05/12/2026",
+    "transaction_date": "2026-04-03",
+    "owner": "self",
+    "ticker": "NVDA",
+    "asset_description": "NVIDIA Corp - TEST DATA",
+    "type": "sale_partial",
+    "amount": "$1,001 - $15,000",
+    "representative": "Hon. Testa Fixture",
+    "district": "ZZ00",
+    "ptr_link": "https://disclosures-clerk.house.gov/ptr/TEST-0002",
+    "cap_gains_over_200_usd": true
+  },
+  {
+    "disclosure_year": 2026,
+    "disclosure_date": "05/20/2026",
+    "transaction_date": "2026-04-10",
+    "owner": "self",
+    "ticker": "--",
+    "asset_description": "Municipal Bond Fund Series Q - TEST DATA",
+    "type": "purchase",
+    "amount": "$50,000,000 +",
+    "representative": "Hon. Sample Q. Placeholder",
+    "district": "ZZ01",
+    "ptr_link": "https://disclosures-clerk.house.gov/ptr/TEST-0003",
+    "cap_gains_over_200_usd": false
+  },
+  {
+    "disclosure_year": 2026,
+    "disclosure_date": "not-a-date",
+    "transaction_date": "2026-04-11",
+    "owner": "self",
+    "ticker": "AAPL",
+    "asset_description": "Malformed record, should be skipped - TEST DATA",
+    "type": "purchase",
+    "amount": "$1,001 - $15,000",
+    "representative": "Hon. Broken Row",
+    "district": "ZZ02",
+    "ptr_link": "https://disclosures-clerk.house.gov/ptr/TEST-0004",
+    "cap_gains_over_200_usd": false
+  }
+]
