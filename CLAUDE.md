@@ -12,6 +12,11 @@ product only - it is NOT investment advice and must never auto-execute trades.
 - tests/              - unittest suite + fixtures (fictional politicians, TEST DATA)
 - scripts/delegate.ps1 - dispatch wrapper for the local Antigravity CLI (`agy`)
 
+## Conventions
+- Multi-line commit messages always go via a message file and `git commit -F`
+  (e.g. scratch/commit_msg.txt), never inline heredocs — they exceed the shell
+  parsing limit.
+
 ## Commands
 - Run tests:        python -m unittest discover -s tests -v
 - Ingest fixtures:  python -m pelositracker ingest --source fixtures
