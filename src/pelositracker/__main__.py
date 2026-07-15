@@ -14,7 +14,7 @@ import sys
 import urllib.error
 from pathlib import Path
 
-from . import api, clerk, config, db, fetcher, watchlists
+from . import api, clerk, config, db, digest, fetcher, watchlists
 from .api import DISCLAIMER
 from .pipeline import ingest_house_records, ingest_records, ingest_senate_filings
 
@@ -120,6 +120,21 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         conn.close()
 
 
+def _cmd_digest(args: argparse.Namespace) -> int:
+    conn = db.connect(args.db)
+    try:
+        db.init_schema(conn)
+        result = digest.run_digest(conn, output_dir=args.output_dir)
+        print(result.digest_text)
+        if result.output_path is not None:
+            print(f"digest written to {result.output_path}")
+        if result.emailed:
+            print("digest emailed")
+        return 0
+    finally:
+        conn.close()
+
+
 def _cmd_serve(args: argparse.Namespace) -> int:
     api.serve(args.db)
     return 0
@@ -151,6 +166,12 @@ def main(argv: list[str] | None = None) -> int:
     watch_remove = watch_sub.add_parser("remove", help="Remove a watchlist entry")
     watch_remove.add_argument("watch_id", type=int)
     watch.set_defaults(func=_cmd_watch)
+
+    digest_parser = subparsers.add_parser(
+        "digest", help="Print and record new watched trades since the last run"
+    )
+    digest_parser.add_argument("--output-dir", default="digests")
+    digest_parser.set_defaults(func=_cmd_digest)
 
     args = parser.parse_args(argv)
     return int(args.func(args))
