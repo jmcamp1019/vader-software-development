@@ -5,9 +5,10 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from . import db
+from . import config, db
 from .normalizer import (
     NormalizedTrade,
+    extract_filing_doc_id,
     normalize_house_record,
     normalize_senate_filing,
     normalize_senate_record,
@@ -28,11 +29,13 @@ class IngestStats:
     inserted: int = 0
     duplicates: int = 0
     skipped: int = 0
+    quarantined: int = 0
 
     def summary(self) -> str:
         return (
             f"[{self.chamber}] records={self.total_records} inserted={self.inserted} "
-            f"duplicates={self.duplicates} skipped={self.skipped}"
+            f"duplicates={self.duplicates} skipped={self.skipped} "
+            f"quarantined={self.quarantined}"
         )
 
 
@@ -40,6 +43,7 @@ def ingest_records(
     conn: sqlite3.Connection,
     records: list[dict[str, Any]],
     chamber: str,
+    provenance: str | None = None,
 ) -> IngestStats:
     """Normalize and idempotently store a batch of raw feed records.
 
@@ -58,13 +62,45 @@ def ingest_records(
             stats.skipped += 1
 
     db.init_schema(conn)
-    stats.inserted, stats.duplicates = db.upsert_trades(conn, normalized)
+    stats.inserted, stats.duplicates = db.upsert_trades(conn, normalized, provenance)
+    return stats
+
+
+def ingest_house_records(
+    conn: sqlite3.Connection,
+    records: list[dict[str, Any]],
+    clerk_doc_ids: set[str],
+) -> IngestStats:
+    """Ingest house mirror records anchored to the official Clerk index (ADR-001).
+
+    A record whose filing DocID is missing or absent from the official index is
+    quarantined: counted, reported, never inserted. Records that pass the
+    anchor but fail normalization (artifacts, bad dates/amounts) are skipped.
+    """
+    stats = IngestStats(chamber="house", total_records=len(records))
+
+    normalized: list[NormalizedTrade] = []
+    for record in records:
+        doc_id = extract_filing_doc_id(record)
+        if doc_id is None or doc_id not in clerk_doc_ids:
+            stats.quarantined += 1
+            continue
+        try:
+            normalized.append(normalize_house_record(record))
+        except ValueError:
+            stats.skipped += 1
+
+    db.init_schema(conn)
+    stats.inserted, stats.duplicates = db.upsert_trades(
+        conn, normalized, config.PROVENANCE_HOUSE_MIRROR
+    )
     return stats
 
 
 def ingest_senate_filings(
     conn: sqlite3.Connection,
     filings: list[dict[str, Any]],
+    provenance: str | None = None,
 ) -> IngestStats:
     """Normalize and idempotently store senate daily-summary filings.
 
@@ -86,5 +122,5 @@ def ingest_senate_filings(
         stats.skipped += txn_count - len(trades)
 
     db.init_schema(conn)
-    stats.inserted, stats.duplicates = db.upsert_trades(conn, normalized)
+    stats.inserted, stats.duplicates = db.upsert_trades(conn, normalized, provenance)
     return stats

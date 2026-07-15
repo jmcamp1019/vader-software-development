@@ -8,6 +8,7 @@ Domain invariants enforced here:
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
@@ -15,6 +16,22 @@ from typing import Any
 from .amounts import parse_amount_range
 
 _DATE_FORMATS = ("%Y-%m-%d", "%m/%d/%Y")
+
+_DOC_ID_URL_PATTERN = re.compile(r"/(\d+)\.pdf$")
+
+# Fields of a house mirror record that we consume; any control-character
+# artifact in these (a known PDF-extraction defect of the mirror, ADR-001)
+# rejects the whole row.
+_HOUSE_GUARDED_FIELDS = (
+    "representative",
+    "ticker",
+    "asset_description",
+    "type",
+    "amount",
+    "transaction_date",
+    "disclosure_date",
+    "owner",
+)
 
 _TYPE_MAP = {
     "purchase": "buy",
@@ -161,8 +178,41 @@ def _build(
     )
 
 
+def _has_control_chars(value: str) -> bool:
+    return any(ord(ch) < 32 or ord(ch) == 127 for ch in value)
+
+
+def reject_artifact_fields(record: dict[str, Any]) -> None:
+    """Reject house mirror rows carrying PDF-extraction artifacts (ADR-001)."""
+    for field in _HOUSE_GUARDED_FIELDS:
+        value = record.get(field)
+        if isinstance(value, str) and _has_control_chars(value):
+            raise ValueError(f"control-character artifact in field {field!r}")
+
+
+def extract_filing_doc_id(record: dict[str, Any]) -> str | None:
+    """Filing DocID of a house mirror record, for the Clerk integrity anchor.
+
+    Prefers the mirror's explicit filing_id, falling back to the DocID embedded
+    in the source PDF URL. None means the trade cannot be anchored (caller
+    quarantines it).
+    """
+    filing_id = str(record.get("filing_id") or "").strip()
+    if filing_id:
+        return filing_id
+    url = str(record.get("source_url") or record.get("ptr_link") or "")
+    match = _DOC_ID_URL_PATTERN.search(url)
+    return match.group(1) if match else None
+
+
 def normalize_house_record(record: dict[str, Any]) -> NormalizedTrade:
-    """Normalize one record from the House Stock Watcher all_transactions feed."""
+    """Normalize one record from the house mirror all_transactions feed.
+
+    Supports both the successor mirror (source_url) and the legacy feed
+    (ptr_link). The mirror's amount_mid field is ignored entirely: amounts are
+    parsed only from the official range string (ADR-001 / gate rule 2).
+    """
+    reject_artifact_fields(record)
     return _build(
         politician_name=_clean_name(record.get("representative")),
         chamber="house",
@@ -173,7 +223,7 @@ def normalize_house_record(record: dict[str, Any]) -> NormalizedTrade:
         transaction_date_raw=record.get("transaction_date"),
         disclosure_date_raw=record.get("disclosure_date"),
         owner=(record.get("owner") or None),
-        source_url=record.get("ptr_link"),
+        source_url=record.get("source_url") or record.get("ptr_link"),
     )
 
 

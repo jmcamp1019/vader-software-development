@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS trades (
     disclosure_date TEXT NOT NULL,
     owner TEXT,
     source_url TEXT NOT NULL,
-    ingest_hash TEXT NOT NULL UNIQUE
+    ingest_hash TEXT NOT NULL UNIQUE,
+    provenance TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_trades_ticker ON trades (ticker);
@@ -49,7 +50,39 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
 
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    _migrate_provenance(conn)
     conn.commit()
+
+
+def _migrate_provenance(conn: sqlite3.Connection) -> None:
+    """Additive migration: per-source provenance on trades (ADR-001).
+
+    Pre-existing rows are backfilled by chamber — before this migration each
+    chamber had exactly one live source, so the mapping is faithful.
+    """
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(trades)")}
+    if "provenance" in columns:
+        return
+    conn.execute("ALTER TABLE trades ADD COLUMN provenance TEXT")
+    conn.execute(
+        """
+        UPDATE trades SET provenance = (
+            SELECT CASE p.chamber
+                WHEN 'senate' THEN 'senate-stock-watcher-github'
+                ELSE 'house-stock-watcher-legacy'
+            END
+            FROM politicians p WHERE p.id = trades.politician_id
+        )
+        WHERE provenance IS NULL
+        """
+    )
+
+
+def purge_provenance(conn: sqlite3.Connection, provenance: str) -> int:
+    """Delete every trade a single source contributed. Returns rows deleted."""
+    cursor = conn.execute("DELETE FROM trades WHERE provenance = ?", (provenance,))
+    conn.commit()
+    return cursor.rowcount
 
 
 def get_or_create_politician(conn: sqlite3.Connection, full_name: str, chamber: str) -> int:
@@ -65,7 +98,11 @@ def get_or_create_politician(conn: sqlite3.Connection, full_name: str, chamber: 
     return int(row["id"])
 
 
-def upsert_trades(conn: sqlite3.Connection, trades: Iterable[NormalizedTrade]) -> tuple[int, int]:
+def upsert_trades(
+    conn: sqlite3.Connection,
+    trades: Iterable[NormalizedTrade],
+    provenance: str | None = None,
+) -> tuple[int, int]:
     """Insert trades idempotently. Returns (inserted, duplicates)."""
     inserted = 0
     duplicates = 0
@@ -76,8 +113,9 @@ def upsert_trades(conn: sqlite3.Connection, trades: Iterable[NormalizedTrade]) -
             INSERT OR IGNORE INTO trades (
                 politician_id, ticker, asset_name, transaction_type,
                 amount_min_cents, amount_max_cents,
-                transaction_date, disclosure_date, owner, source_url, ingest_hash
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                transaction_date, disclosure_date, owner, source_url, ingest_hash,
+                provenance
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 politician_id,
@@ -91,6 +129,7 @@ def upsert_trades(conn: sqlite3.Connection, trades: Iterable[NormalizedTrade]) -
                 trade.owner,
                 trade.source_url,
                 trade.ingest_hash,
+                provenance,
             ),
         )
         if cursor.rowcount == 1:

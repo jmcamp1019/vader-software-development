@@ -13,8 +13,8 @@ import sys
 import urllib.error
 from pathlib import Path
 
-from . import config, db, fetcher
-from .pipeline import ingest_records, ingest_senate_filings
+from . import clerk, config, db, fetcher
+from .pipeline import ingest_house_records, ingest_records, ingest_senate_filings
 
 DISCLAIMER = (
     "PelosiTracker displays public STOCK Act disclosure data. Filings may lag "
@@ -33,23 +33,39 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
                 ("senate", fetcher.load_fixture(fixture_dir / "senate_sample.json")),
             ]
             for chamber, records in batches:
-                print(ingest_records(conn, records, chamber).summary())
+                print(
+                    ingest_records(
+                        conn, records, chamber, config.PROVENANCE_FIXTURES
+                    ).summary()
+                )
         elif args.source == "house":
+            records = fetcher.fetch_json(config.HOUSE_ALL_TRANSACTIONS_URL)
+            # ADR-001 integrity anchor: fetch the official Clerk filing index;
+            # fail closed (insert nothing) if it cannot be retrieved.
             try:
-                records = fetcher.fetch_json(config.HOUSE_ALL_TRANSACTIONS_URL)
-            except urllib.error.HTTPError as exc:
-                if exc.code == 403:
-                    print(
-                        "house feed unavailable (known upstream outage): "
-                        "house-stock-watcher S3 bucket returns 403 Forbidden",
-                        file=sys.stderr,
-                    )
-                    return 1
-                raise
-            print(ingest_records(conn, records, "house").summary())
+                clerk_doc_ids = clerk.fetch_doc_ids_for_records(records)
+            except (ValueError, OSError) as exc:  # URLError is an OSError
+                print(
+                    "house ingest aborted: official Clerk index unavailable "
+                    f"({exc}); failing closed, nothing inserted",
+                    file=sys.stderr,
+                )
+                return 1
+            stats = ingest_house_records(conn, records, clerk_doc_ids)
+            print(stats.summary())
+            if stats.quarantined:
+                print(
+                    f"quarantined {stats.quarantined} mirror trade(s) with no "
+                    "matching filing in the official House Clerk index (not inserted)",
+                    file=sys.stderr,
+                )
         else:  # senate
             filings = fetcher.fetch_json(config.SENATE_DAILY_SUMMARIES_URL)
-            print(ingest_senate_filings(conn, filings).summary())
+            print(
+                ingest_senate_filings(
+                    conn, filings, config.PROVENANCE_SENATE_GITHUB
+                ).summary()
+            )
 
         print(f"db={args.db} trades={db.trade_count(conn)} politicians={db.politician_count(conn)}")
         print(DISCLAIMER)
