@@ -34,6 +34,19 @@ review. Files agy writes anywhere else (including outside this repo) are never r
 used, or executed. Dispatch prompts must state this rule and that tests use FICTIONAL
 politicians only.
 
+agy demotion (post incident-001, see docs/incident-001-agy-containment.md):
+- agy is dispatched for BOILERPLATE ONLY (self-contained new modules and their
+  tests). Judgment code — validation, security, amount handling, anything that
+  touches existing modules — is written by the Executive Architect directly.
+- Dispatch exclusively through scripts/delegate.ps1 (sandboxed, isolated temp
+  cwd, fresh session). Never invoke agy from the repo or any other workspace.
+- After EVERY dispatch, run `git status`; any repo change caused by a dispatch
+  is an automatic reject of that round and must be reverted before proceeding.
+- Never dispatch from a workspace containing secrets: agy has bypassed its own
+  sandbox for filesystem reads.
+- Budget: 3 dispatch rounds per work order; after 2 rejections, write it
+  directly and note the exceeded budget in the commit.
+
 ## Verification Gate (all must pass before any commit)
 1. Full type hints; no bare excepts.
 2. Amount ranges preserved end-to-end (min/max integer cents; open max = NULL).
