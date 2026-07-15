@@ -20,12 +20,12 @@ if ($outDir -and -not (Test-Path $outDir)) { New-Item -ItemType Directory -Path 
 Write-Host "[vader] Dispatching $((Get-Item $PromptFile).Length) bytes to agy..."
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
-# Non-interactive Antigravity CLI invocation. If your agy version uses different
-# flags for one-shot prompts or model selection, adjust this line (check: agy --help).
+# Non-interactive Antigravity CLI invocation. This agy build takes the prompt
+# as the -p/--print argument (not stdin) and uses --model for model selection.
 if ($Model) {
-    $result = $prompt | agy -m $Model -p 2>&1
+    $result = agy --model $Model --print-timeout 10m -p $prompt 2>&1
 } else {
-    $result = $prompt | agy -p 2>&1
+    $result = agy --print-timeout 10m -p $prompt 2>&1
 }
 
 $sw.Stop()
