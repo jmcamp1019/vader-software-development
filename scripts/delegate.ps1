@@ -22,10 +22,13 @@ $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
 # Non-interactive Antigravity CLI invocation. This agy build takes the prompt
 # as the -p/--print argument (not stdin) and uses --model for model selection.
+# --new-project: every dispatch is a fresh session — without it agy resumes
+# prior conversation state and anchors to stale draft workspaces instead of
+# the prompt.
 if ($Model) {
-    $result = agy --model $Model --print-timeout 10m -p $prompt 2>&1
+    $result = agy --new-project --model $Model --print-timeout 10m -p $prompt 2>&1
 } else {
-    $result = agy --print-timeout 10m -p $prompt 2>&1
+    $result = agy --new-project --print-timeout 10m -p $prompt 2>&1
 }
 
 $sw.Stop()
