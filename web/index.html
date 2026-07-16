@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PelosiTracker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="navbar">
+        <div class="nav-container">
+            <a href="#/feed" class="logo">PelosiTracker</a>
+            <nav class="nav-links">
+                <a href="#/feed" id="nav-feed">Feed</a>
+                <a href="#/politicians" id="nav-politicians">Politicians</a>
+                <a href="#/watchlists" id="nav-watchlists">Watchlists</a>
+            </nav>
+            <form id="search-form" class="search-form">
+                <input type="text" id="search-input" placeholder="Search Ticker (e.g. NVDA)" required autocomplete="off">
+                <button type="submit">Search</button>
+            </form>
+        </div>
+    </header>
+
+    <main id="app-root" class="container">
+        <!-- Content dynamically populated by app.js -->
+    </main>
+
+    <footer class="disclaimer-footer">
+        <div class="container">
+            <p>PelosiTracker displays public STOCK Act disclosure data. Filings may lag trades by up to 45 days and report amount ranges, not exact values. Informational only — not investment advice.</p>
+        </div>
+    </footer>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>

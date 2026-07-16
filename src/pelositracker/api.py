@@ -16,7 +16,7 @@ from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, quote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from .watchlists import list_watchlists
 
@@ -32,6 +32,17 @@ DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
 
 _TRANSACTION_TYPES = ("buy", "sell", "exchange")
+
+# Static dashboard assets (WO-5). Only these types are ever served; anything
+# else under /ui/* is a 404 regardless of what exists on disk.
+WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
+_STATIC_CONTENT_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".ico": "image/x-icon",
+}
 
 _TRADE_SELECT = """
     SELECT t.id, t.politician_id, p.full_name AS politician_name, p.chamber,
@@ -201,6 +212,10 @@ def _politician_detail(
 
 class _ApiHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
+        static_parts = self._static_request_parts()
+        if static_parts is not None:
+            self._serve_static(static_parts)
+            return
         try:
             status, payload, headers = self._handle_get()
         except _BadRequest as exc:
@@ -209,6 +224,43 @@ class _ApiHandler(BaseHTTPRequestHandler):
             # Never leak database/exception detail to clients.
             status, payload, headers = 500, {"error": "internal database error"}, {}
         self._send_json(status, payload, headers)
+
+    def _static_request_parts(self) -> list[str] | None:
+        """Return path parts under /ui/, or None when this is not a UI request.
+
+        Percent-decoding happens BEFORE the split so encoded traversal
+        (%2e%2e, %2f) lands in the parts and gets caught by the resolve guard.
+        """
+        path = unquote(urlsplit(self.path).path)
+        segments = [segment for segment in path.split("/") if segment]
+        if segments[:1] != ["ui"]:
+            return None
+        return segments[1:]
+
+    def _serve_static(self, parts: list[str]) -> None:
+        if not parts:
+            parts = ["index.html"]
+        try:
+            candidate = WEB_ROOT.joinpath(*parts).resolve()
+        except (OSError, ValueError):
+            self._send_json(404, {"error": "not found"})
+            return
+        content_type = _STATIC_CONTENT_TYPES.get(candidate.suffix.lower())
+        # Traversal guard: the fully resolved path (symlinks included) must
+        # stay inside web/ and be a whitelisted file type.
+        if (
+            content_type is None
+            or not candidate.is_relative_to(WEB_ROOT)
+            or not candidate.is_file()
+        ):
+            self._send_json(404, {"error": "not found"})
+            return
+        body = candidate.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _handle_get(self) -> tuple[int, dict[str, Any], dict[str, str]]:
         parsed = urlsplit(self.path)
