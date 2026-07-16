@@ -1,0 +1,16 @@
+{
+  "comment": "Synthetic backtest fixture - TEST DATA, fictional politicians only",
+  "prices": {
+    "TST": [["2026-01-05", 10000], ["2026-01-06", 10000], ["2026-01-07", 11000], ["2026-01-08", 11000], ["2026-01-09", 12000], ["2026-01-12", 12500], ["2026-01-13", 12500], ["2026-01-14", 13000], ["2026-01-15", 12000], ["2026-01-16", 12500]],
+    "ZZZ": [["2026-01-05", 20000], ["2026-01-06", 19000], ["2026-01-07", 18000], ["2026-01-08", 17000], ["2026-01-09", 16000], ["2026-01-12", 15000], ["2026-01-13", 14000], ["2026-01-14", 13000], ["2026-01-15", 12000], ["2026-01-16", 11000]],
+    "SPY": [["2026-01-05", 50000], ["2026-01-06", 50000], ["2026-01-07", 50500], ["2026-01-08", 50500], ["2026-01-09", 51000], ["2026-01-12", 51000], ["2026-01-13", 51500], ["2026-01-14", 51500], ["2026-01-15", 52000], ["2026-01-16", 52000]]
+  },
+  "trades": [
+    {"politician_name": "Testa Fixture", "politician_id": 1, "chamber": "house", "ticker": "TST", "transaction_type": "buy", "amount_min_cents": 100100, "amount_max_cents": 1500000, "disclosure_date": "2026-01-05"},
+    {"politician_name": "Testa Fixture", "politician_id": 1, "chamber": "house", "ticker": "TST", "transaction_type": "sell", "amount_min_cents": 100100, "amount_max_cents": 1500000, "disclosure_date": "2026-01-09"},
+    {"politician_name": "Zed Placeholder", "politician_id": 2, "chamber": "senate", "ticker": "ZZZ", "transaction_type": "buy", "amount_min_cents": 1000100, "amount_max_cents": null, "disclosure_date": "2026-01-06"},
+    {"politician_name": "Zed Placeholder", "politician_id": 2, "chamber": "senate", "ticker": "NOPE", "transaction_type": "buy", "amount_min_cents": 100100, "amount_max_cents": 1500000, "disclosure_date": "2026-01-07"},
+    {"politician_name": "Zed Placeholder", "politician_id": 2, "chamber": "senate", "ticker": null, "transaction_type": "buy", "amount_min_cents": 100100, "amount_max_cents": 1500000, "disclosure_date": "2026-01-07"},
+    {"politician_name": "Testa Fixture", "politician_id": 1, "chamber": "house", "ticker": "ZZZ", "transaction_type": "sell", "amount_min_cents": 100100, "amount_max_cents": 1500000, "disclosure_date": "2026-01-08"}
+  ]
+}

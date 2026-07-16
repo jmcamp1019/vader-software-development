@@ -13,8 +13,9 @@ import argparse
 import sys
 import urllib.error
 from pathlib import Path
+from typing import Any
 
-from . import api, clerk, config, db, digest, fetcher, runner, watchlists
+from . import api, backtest, clerk, config, db, digest, fetcher, prices, runner, watchlists
 from .api import DISCLAIMER
 from .pipeline import ingest_house_records, ingest_records, ingest_senate_filings
 
@@ -135,6 +136,92 @@ def _cmd_digest(args: argparse.Namespace) -> int:
         conn.close()
 
 
+def _today() -> str:
+    from datetime import date
+
+    return date.today().isoformat()
+
+
+def _prepare_backtest(
+    args: argparse.Namespace,
+) -> tuple[Any, list[dict[str, Any]], str, prices.PriceCoverage]:
+    conn = db.connect(args.db)
+    db.init_schema(conn)
+    end_date = _today()
+    trades = backtest.load_trades(
+        conn,
+        args.from_date,
+        politician_id=getattr(args, "politician_id", None),
+        chamber=getattr(args, "chamber", None),
+    )
+    tickers = sorted(
+        {str(t["ticker"]).upper() for t in trades if t["ticker"]}
+        | {backtest.BENCHMARK_TICKER}
+    )
+    print(f"[prices] ensuring coverage for {len(tickers)} tickers to {end_date}")
+    coverage = prices.ensure_prices(conn, tickers, end_date)
+    print(
+        f"[prices] fetched={coverage.fetched} cached={coverage.cached}"
+        f" unpriced={coverage.unpriced}"
+    )
+    return conn, trades, end_date, coverage
+
+
+def _cmd_backtest(args: argparse.Namespace) -> int:
+    conn, trades, end_date, coverage = _prepare_backtest(args)
+    try:
+        outcome = backtest.run_backtest(
+            conn,
+            trades,
+            args.from_date,
+            end_date,
+            cost_bps=args.cost_bps,
+            hold_days=args.hold,
+        )
+        report = backtest.format_report(outcome)
+        print(report)
+        reports_dir = Path("reports")
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        report_path = reports_dir / f"backtest-{end_date}.md"
+        suffix = f"\n_Run: exit={outcome.exit_mode} cost={outcome.cost_bps}bps_\n\n"
+        with report_path.open("a", encoding="utf-8") as handle:
+            handle.write(report + suffix)
+        print(f"report appended to {report_path}")
+        return 0
+    finally:
+        conn.close()
+
+
+def _cmd_leaderboard(args: argparse.Namespace) -> int:
+    conn, trades, end_date, coverage = _prepare_backtest(args)
+    try:
+        rows = backtest.build_leaderboard(
+            conn, trades, args.from_date, end_date, cost_bps=args.cost_bps
+        )
+        print(f"> {backtest.MANDATORY_REPORT_HEADER}\n")
+        print(
+            f"Leaderboard {args.from_date} → {end_date} (mirror-sells,"
+            f" {args.cost_bps} bps, min {backtest.LEADERBOARD_MIN_PRICED_TRADES}"
+            " priced trades, sorted by PESSIMISTIC excess bound)"
+        )
+        print(f"unpriced tickers excluded: {coverage.unpriced}")
+        header = f"{'#':>3}  {'politician':<32} {'trades':>6}  {'excess band vs SPY':<24} {'hit rate band':<20}"
+        print(header)
+        print("-" * len(header))
+        for rank, row in enumerate(rows, start=1):
+            excess = f"[{row.excess_low * 100:+.1f}%, {row.excess_high * 100:+.1f}%]"
+            hit = f"[{row.hit_rate_low * 100:.0f}%, {row.hit_rate_high * 100:.0f}%]"
+            print(
+                f"{rank:>3}  {row.politician_name[:32]:<32} {row.priced_trades:>6}"
+                f"  {excess:<24} {hit:<20}"
+            )
+        if not rows:
+            print("(no politician meets the minimum priced-trade threshold)")
+        return 0
+    finally:
+        conn.close()
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     interval = runner.resolve_interval_hours(args.interval_hours)
     return runner.run_loop(args.db, interval, once=args.once)
@@ -191,6 +278,31 @@ def main(argv: list[str] | None = None) -> int:
         "--once", action="store_true", help="Run a single cycle and exit"
     )
     run_parser.set_defaults(func=_cmd_run)
+
+    backtest_parser = subparsers.add_parser(
+        "backtest", help="Hypothetical copy-trading backtest (banded, vs SPY)"
+    )
+    backtest_parser.add_argument("--from", dest="from_date", required=True)
+    exit_group = backtest_parser.add_mutually_exclusive_group()
+    exit_group.add_argument("--hold", type=int, default=None, metavar="DAYS")
+    exit_group.add_argument(
+        "--mirror-sells", action="store_true", help="Exit on politician sells (default)"
+    )
+    backtest_parser.add_argument("--politician-id", type=int, default=None)
+    backtest_parser.add_argument("--chamber", choices=("house", "senate"), default=None)
+    backtest_parser.add_argument(
+        "--cost-bps", type=int, default=backtest.DEFAULT_COST_BPS
+    )
+    backtest_parser.set_defaults(func=_cmd_backtest)
+
+    leaderboard_parser = subparsers.add_parser(
+        "leaderboard", help="Per-politician excess-vs-SPY bands (pessimistic order)"
+    )
+    leaderboard_parser.add_argument("--from", dest="from_date", required=True)
+    leaderboard_parser.add_argument(
+        "--cost-bps", type=int, default=backtest.DEFAULT_COST_BPS
+    )
+    leaderboard_parser.set_defaults(func=_cmd_leaderboard)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

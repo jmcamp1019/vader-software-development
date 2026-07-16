@@ -39,6 +39,13 @@ SENATE_DAILY_SUMMARIES_URL: str = (
     "/master/aggregate/all_daily_summaries.json"
 )
 
+# WO-7 price history: Stooq free daily-OHLC CSV endpoint (no API key). Symbols
+# are lowercase with '.us' suffix, dots mapped to dashes (BRK.B -> brk-b.us).
+STOOQ_DAILY_CSV_URL_TEMPLATE: str = "https://stooq.com/q/d/l/?s={symbol}&i=d"
+PRICE_FETCH_SLEEP_SECONDS: float = float(
+    os.environ.get("PT_PRICE_FETCH_SLEEP", "0.3")
+)
+
 DEFAULT_DB_PATH: str = os.environ.get("PELOSITRACKER_DB", "pelositracker.db")
 HTTP_TIMEOUT_SECONDS: int = int(os.environ.get("PELOSITRACKER_HTTP_TIMEOUT", "90"))
 USER_AGENT: str = "PelosiTracker/0.1 (public-disclosure research tool)"

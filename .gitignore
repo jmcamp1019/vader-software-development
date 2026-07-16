@@ -3,4 +3,5 @@ __pycache__/
 *.db
 scratch/
 digests/
+reports/
 .env
