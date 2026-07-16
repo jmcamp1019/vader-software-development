@@ -162,7 +162,7 @@ def _prepare_backtest(
     coverage = prices.ensure_prices(conn, tickers, end_date)
     print(
         f"[prices] fetched={coverage.fetched} cached={coverage.cached}"
-        f" unpriced={coverage.unpriced}"
+        f" unpriced={coverage.unpriced} skipped={coverage.skipped}"
     )
     return conn, trades, end_date, coverage
 

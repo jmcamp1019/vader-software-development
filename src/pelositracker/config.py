@@ -39,9 +39,16 @@ SENATE_DAILY_SUMMARIES_URL: str = (
     "/master/aggregate/all_daily_summaries.json"
 )
 
-# WO-7 price history: Stooq free daily-OHLC CSV endpoint (no API key). Symbols
-# are lowercase with '.us' suffix, dots mapped to dashes (BRK.B -> brk-b.us).
-STOOQ_DAILY_CSV_URL_TEMPLATE: str = "https://stooq.com/q/d/l/?s={symbol}&i=d"
+# WO-7 price history. The work order named Stooq's CSV endpoint, but as of
+# 2026-07-16 stooq.com fronts it with a JavaScript anti-bot challenge that a
+# stdlib client cannot pass, so daily closes come from Yahoo's chart API
+# instead (same properties: free, no API key, stdlib-parseable, split-adjusted
+# closes). Symbols map dots to dashes (BRK.B -> BRK-B).
+YAHOO_CHART_URL_TEMPLATE: str = (
+    "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+    "?range={range}&interval=1d"
+)
+PRICE_FETCH_RANGE: str = os.environ.get("PT_PRICE_FETCH_RANGE", "5y")
 PRICE_FETCH_SLEEP_SECONDS: float = float(
     os.environ.get("PT_PRICE_FETCH_SLEEP", "0.3")
 )
