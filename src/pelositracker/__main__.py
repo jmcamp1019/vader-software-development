@@ -14,7 +14,7 @@ import sys
 import urllib.error
 from pathlib import Path
 
-from . import api, clerk, config, db, digest, fetcher, watchlists
+from . import api, clerk, config, db, digest, fetcher, runner, watchlists
 from .api import DISCLAIMER
 from .pipeline import ingest_house_records, ingest_records, ingest_senate_filings
 
@@ -135,6 +135,11 @@ def _cmd_digest(args: argparse.Namespace) -> int:
         conn.close()
 
 
+def _cmd_run(args: argparse.Namespace) -> int:
+    interval = runner.resolve_interval_hours(args.interval_hours)
+    return runner.run_loop(args.db, interval, once=args.once)
+
+
 def _cmd_serve(args: argparse.Namespace) -> int:
     api.serve(args.db)
     return 0
@@ -172,6 +177,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     digest_parser.add_argument("--output-dir", default="digests")
     digest_parser.set_defaults(func=_cmd_digest)
+
+    run_parser = subparsers.add_parser(
+        "run", help="Scheduled runner: ingest senate + house then digest, on a loop"
+    )
+    run_parser.add_argument(
+        "--interval-hours",
+        type=float,
+        default=None,
+        help="Hours between cycles (default env PT_RUN_INTERVAL_HOURS or 6)",
+    )
+    run_parser.add_argument(
+        "--once", action="store_true", help="Run a single cycle and exit"
+    )
+    run_parser.set_defaults(func=_cmd_run)
 
     args = parser.parse_args(argv)
     return int(args.func(args))
