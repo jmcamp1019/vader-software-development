@@ -149,11 +149,14 @@ def simulate(
     hold_days: int | None,
     from_date: str,
     end_date: str,
+    realized_only: bool = False,
 ) -> tuple[RunMetrics, dict[str, int]]:
     """One sized run. Returns metrics plus exclusion counts for this run.
 
     trades must be pre-filtered to the window and sorted by disclosure_date;
     exit_mode is fixed-hold when hold_days is not None, else mirror-sells.
+    realized_only restricts every metric to positions actually closed inside
+    the window — open marks (and their benchmark shadows) are excluded.
     """
     cost_factor = 1.0 - cost_bps / 10_000.0
     exclusions = {"null_ticker": 0, "unpriced_ticker": 0, "no_entry_price": 0,
@@ -266,6 +269,15 @@ def simulate(
                 mark = (bench_pos.entry_date, bench_pos.entry_close_cents)
             bench_pos.final_value_cents = bench_pos.shares * mark[1] * cost_factor
 
+    if realized_only:
+        kept = [
+            (p, shadow)
+            for p, shadow in zip(positions, bench_shadows)
+            if p.closed
+        ]
+        positions = [p for p, _ in kept]
+        bench_shadows = [shadow for _, shadow in kept]
+
     invested = sum(p.invested_cents for p in positions)
     final_value = sum(p.final_value_cents for p in positions)
     total_return = (final_value / invested - 1.0) if invested else 0.0
@@ -377,6 +389,7 @@ def run_backtest(
     end_date: str,
     cost_bps: int = DEFAULT_COST_BPS,
     hold_days: int | None = None,
+    realized_only: bool = False,
 ) -> BacktestOutcome:
     """Band run (min- and max-sized) over cached prices. No network here."""
     from . import prices as prices_module
@@ -401,10 +414,13 @@ def run_backtest(
         raise ValueError("SPY benchmark prices missing; run the price fetch first")
     spy = Series(spy_rows)
 
+    exit_mode = f"hold-{hold_days}d" if hold_days is not None else "mirror-sells"
+    if realized_only:
+        exit_mode += " (realized-only)"
     outcome = BacktestOutcome(
         from_date=from_date,
         end_date=end_date,
-        exit_mode=f"hold-{hold_days}d" if hold_days is not None else "mirror-sells",
+        exit_mode=exit_mode,
         cost_bps=cost_bps,
         unpriced_tickers=unpriced,
     )
@@ -418,6 +434,7 @@ def run_backtest(
             hold_days=hold_days,
             from_date=from_date,
             end_date=end_date,
+            realized_only=realized_only,
         )
         outcome.runs[sizing] = metrics
         outcome.exclusions = exclusions  # identical across sizings by design

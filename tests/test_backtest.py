@@ -47,7 +47,8 @@ def _trades(indices: list[int] | None = None) -> list[dict[str, Any]]:
 
 
 def _run(trades: list[dict[str, Any]], sizing: str = "min", cost_bps: int = 20,
-         hold_days: int | None = None) -> tuple[Any, dict[str, int]]:
+         hold_days: int | None = None,
+         realized_only: bool = False) -> tuple[Any, dict[str, int]]:
     return simulate(
         trades,
         _series(),
@@ -57,6 +58,7 @@ def _run(trades: list[dict[str, Any]], sizing: str = "min", cost_bps: int = 20,
         hold_days=hold_days,
         from_date=FROM_DATE,
         end_date=END_DATE,
+        realized_only=realized_only,
     )
 
 
@@ -149,6 +151,37 @@ class FullFixtureTests(unittest.TestCase):
         metrics, _ = _run(_trades())
         self.assertAlmostEqual(metrics.hit_rate, 0.5, places=10)  # TST won, ZZZ losing
         self.assertLess(metrics.max_drawdown, -0.3)  # ZZZ collapsed 18->11
+
+
+class RealizedOnlyTests(unittest.TestCase):
+    """Full fixture: TST closes (mirror sell); ZZZ stays an open mark.
+
+    Realized-only must therefore equal the hand-computed single-TST numbers
+    and exclude ZZZ from capital, hit rate, and the benchmark shadow.
+    """
+
+    def test_realized_only_restricts_to_closed_positions(self) -> None:
+        metrics, _ = _run(_trades(), realized_only=True)
+        self.assertEqual(metrics.positions, 1)
+        self.assertEqual(metrics.closed_positions, 1)
+        self.assertEqual(metrics.invested_cents, 100_100)
+        self.assertAlmostEqual(metrics.total_return, 0.2475, places=10)
+        self.assertAlmostEqual(metrics.benchmark_return, 0.01796, places=10)
+        self.assertAlmostEqual(metrics.excess_return, 0.22954, places=10)
+        self.assertEqual(metrics.hit_rate, 1.0)
+
+    def test_realized_only_differs_from_marked_run(self) -> None:
+        marked, _ = _run(_trades())
+        realized, _ = _run(_trades(), realized_only=True)
+        self.assertNotAlmostEqual(
+            marked.total_return, realized.total_return, places=3
+        )
+
+    def test_no_closed_positions_yields_zero_not_crash(self) -> None:
+        metrics, _ = _run(_trades([2]), realized_only=True)  # ZZZ buy, never sold
+        self.assertEqual(metrics.positions, 0)
+        self.assertEqual(metrics.total_return, 0.0)
+        self.assertEqual(metrics.hit_rate, 0.0)
 
 
 class ReportTests(unittest.TestCase):

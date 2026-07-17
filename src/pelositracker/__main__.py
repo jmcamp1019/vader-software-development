@@ -177,6 +177,7 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
             end_date,
             cost_bps=args.cost_bps,
             hold_days=args.hold,
+            realized_only=args.realized_only,
         )
         report = backtest.format_report(outcome)
         print(report)
@@ -293,6 +294,11 @@ def main(argv: list[str] | None = None) -> int:
     backtest_parser.add_argument("--chamber", choices=("house", "senate"), default=None)
     backtest_parser.add_argument(
         "--cost-bps", type=int, default=backtest.DEFAULT_COST_BPS
+    )
+    backtest_parser.add_argument(
+        "--realized-only",
+        action="store_true",
+        help="Restrict every metric to positions closed inside the window",
     )
     backtest_parser.set_defaults(func=_cmd_backtest)
 
