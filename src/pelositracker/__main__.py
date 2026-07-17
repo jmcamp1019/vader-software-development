@@ -200,7 +200,8 @@ def _cmd_leaderboard(args: argparse.Namespace) -> int:
         )
         print(f"> {backtest.MANDATORY_REPORT_HEADER}\n")
         print(
-            f"Leaderboard {args.from_date} → {end_date} (mirror-sells,"
+            # ASCII arrow: Windows consoles default to cp1252, which has no U+2192
+            f"Leaderboard {args.from_date} -> {end_date} (mirror-sells,"
             f" {args.cost_bps} bps, min {backtest.LEADERBOARD_MIN_PRICED_TRADES}"
             " priced trades, sorted by PESSIMISTIC excess bound)"
         )
