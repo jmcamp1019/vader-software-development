@@ -9,7 +9,7 @@ import sqlite3
 from pathlib import Path
 from typing import Iterable
 
-from .normalizer import NormalizedTrade
+from .normalizer import NormalizedTrade, canonical_politician_name
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS politicians (
@@ -38,6 +38,13 @@ CREATE TABLE IF NOT EXISTS trades (
 CREATE INDEX IF NOT EXISTS idx_trades_ticker ON trades (ticker);
 CREATE INDEX IF NOT EXISTS idx_trades_politician ON trades (politician_id);
 CREATE INDEX IF NOT EXISTS idx_trades_disclosure_date ON trades (disclosure_date);
+
+CREATE TABLE IF NOT EXISTS politician_aliases (
+    alias_key TEXT NOT NULL,
+    chamber TEXT NOT NULL CHECK (chamber IN ('house', 'senate')),
+    politician_id INTEGER NOT NULL REFERENCES politicians (id),
+    PRIMARY KEY (alias_key, chamber)
+);
 """
 
 
@@ -51,7 +58,113 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     _migrate_provenance(conn)
+    _migrate_politician_identity(conn)
     conn.commit()
+
+
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
+    ).fetchone()
+    return row is not None
+
+
+def _repoint_politician(
+    conn: sqlite3.Connection, dupe_id: int, survivor_id: int
+) -> None:
+    """Move everything referencing a duplicate politician onto the survivor."""
+    conn.execute(
+        "UPDATE trades SET politician_id = ? WHERE politician_id = ?",
+        (survivor_id, dupe_id),
+    )
+    if _table_exists(conn, "watchlists"):
+        survivor_watched = conn.execute(
+            "SELECT 1 FROM watchlists WHERE kind = 'politician' AND politician_id = ?",
+            (survivor_id,),
+        ).fetchone()
+        if survivor_watched is None:
+            conn.execute(
+                "UPDATE watchlists SET politician_id = ?"
+                " WHERE kind = 'politician' AND politician_id = ?",
+                (survivor_id, dupe_id),
+            )
+        else:
+            # Survivor already watched; a second row would break the partial
+            # unique index and mean the same thing anyway.
+            conn.execute(
+                "DELETE FROM watchlists"
+                " WHERE kind = 'politician' AND politician_id = ?",
+                (dupe_id,),
+            )
+    conn.execute(
+        "UPDATE politician_aliases SET politician_id = ? WHERE politician_id = ?",
+        (survivor_id, dupe_id),
+    )
+    conn.execute("DELETE FROM politicians WHERE id = ?", (dupe_id,))
+
+
+def _migrate_politician_identity(conn: sqlite3.Connection) -> None:
+    """Canonical identity per member; merges duplicate spellings.
+
+    Pass 1: every politician row gets a canonical alias key (honorifics
+    dropped, adjacent duplicate tokens collapsed, casefolded). Rows whose key
+    already belongs to another member of the same chamber are merged into the
+    earliest-seen row.
+
+    Pass 2 (initials): keys that differ only by the presence of single-letter
+    initials ("c scott franklin" vs "scott franklin") merge ONLY when every
+    initialed variant in the group agrees on the initials — conflicting
+    initials ("john a smith" vs "john b smith") never merge. Requires at
+    least two non-initial tokens so bare surnames cannot collapse.
+
+    Incremental and idempotent: politicians without an alias row are the only
+    pass-1 work; pass-2 groups converge to single members after merging.
+    """
+    unaliased = conn.execute(
+        """
+        SELECT p.id, p.full_name, p.chamber FROM politicians p
+        LEFT JOIN politician_aliases a ON a.politician_id = p.id
+        WHERE a.politician_id IS NULL ORDER BY p.id ASC
+        """
+    ).fetchall()
+    for row in unaliased:
+        key = canonical_politician_name(str(row["full_name"]))
+        existing = conn.execute(
+            "SELECT politician_id FROM politician_aliases"
+            " WHERE alias_key = ? AND chamber = ?",
+            (key, row["chamber"]),
+        ).fetchone()
+        if existing is None:
+            conn.execute(
+                "INSERT INTO politician_aliases (alias_key, chamber, politician_id)"
+                " VALUES (?, ?, ?)",
+                (key, row["chamber"], row["id"]),
+            )
+        else:
+            _repoint_politician(conn, int(row["id"]), int(existing["politician_id"]))
+
+    groups: dict[tuple[str, str], list[tuple[str, int]]] = {}
+    for row in conn.execute(
+        "SELECT alias_key, chamber, politician_id FROM politician_aliases"
+    ).fetchall():
+        key = str(row["alias_key"])
+        stripped = " ".join(t for t in key.split() if len(t) > 1)
+        groups.setdefault((stripped, str(row["chamber"])), []).append(
+            (key, int(row["politician_id"]))
+        )
+    for (stripped, _chamber), members in groups.items():
+        ids = sorted({pid for _, pid in members})
+        if len(ids) < 2 or len(stripped.split()) < 2:
+            continue
+        signatures = {
+            tuple(t for t in key.split() if len(t) == 1) for key, _ in members
+        }
+        signatures.discard(())
+        if len(signatures) != 1:
+            continue  # conflicting initials: distinct people, never merge
+        survivor = ids[0]
+        for dupe in ids[1:]:
+            _repoint_politician(conn, dupe, survivor)
 
 
 def _migrate_provenance(conn: sqlite3.Connection) -> None:
@@ -86,6 +199,15 @@ def purge_provenance(conn: sqlite3.Connection, provenance: str) -> int:
 
 
 def get_or_create_politician(conn: sqlite3.Connection, full_name: str, chamber: str) -> int:
+    """Resolve by canonical identity so variant spellings share one row."""
+    key = canonical_politician_name(full_name)
+    alias = conn.execute(
+        "SELECT politician_id FROM politician_aliases"
+        " WHERE alias_key = ? AND chamber = ?",
+        (key, chamber),
+    ).fetchone()
+    if alias is not None:
+        return int(alias["politician_id"])
     conn.execute(
         "INSERT OR IGNORE INTO politicians (full_name, chamber) VALUES (?, ?)",
         (full_name, chamber),
@@ -95,6 +217,11 @@ def get_or_create_politician(conn: sqlite3.Connection, full_name: str, chamber: 
         (full_name, chamber),
     ).fetchone()
     assert row is not None  # INSERT OR IGNORE guarantees existence
+    conn.execute(
+        "INSERT OR IGNORE INTO politician_aliases (alias_key, chamber, politician_id)"
+        " VALUES (?, ?, ?)",
+        (key, chamber, int(row["id"])),
+    )
     return int(row["id"])
 
 

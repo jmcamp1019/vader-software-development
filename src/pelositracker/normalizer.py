@@ -283,3 +283,31 @@ def normalize_senate_filing(filing: dict[str, Any]) -> list[NormalizedTrade]:
         except ValueError:
             continue
     return trades
+
+
+_HONORIFIC_TOKENS = frozenset(
+    {
+        "mr", "mrs", "ms", "miss", "dr", "hon", "honorable",
+        "rep", "representative", "sen", "senator",
+    }
+)
+
+
+def canonical_politician_name(full_name: str) -> str:
+    """Canonical identity key for a member of Congress.
+
+    Honorific tokens dropped ("Marjorie Taylor Mrs Greene"), punctuation
+    stripped, adjacent duplicate tokens collapsed ("Scott Scott Franklin"),
+    case folded. Single-letter initials are KEPT — they are identity-bearing;
+    merging across an initial happens only in the db migration, which has a
+    conflict guard.
+    """
+    out: list[str] = []
+    for raw in full_name.split():
+        token = raw.strip(".,").casefold()
+        if not token or token in _HONORIFIC_TOKENS:
+            continue
+        if out and token == out[-1]:
+            continue
+        out.append(token)
+    return " ".join(out)
