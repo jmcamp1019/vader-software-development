@@ -35,17 +35,28 @@ used, or executed. Dispatch prompts must state this rule and that tests use FICT
 politicians only.
 
 agy demotion (post incident-001, see docs/incident-001-agy-containment.md):
-- agy is dispatched for BOILERPLATE ONLY (self-contained new modules and their
-  tests). Judgment code — validation, security, amount handling, anything that
-  touches existing modules — is written by the Executive Architect directly.
+- agy is dispatched for FIXTURES/DATA ONLY (see Model routing below). Judgment
+  code — validation, security, amount handling, anything that touches existing
+  modules — is written by the Executive Architect directly.
 - Dispatch exclusively through scripts/delegate.ps1 (sandboxed, isolated temp
   cwd, fresh session). Never invoke agy from the repo or any other workspace.
 - After EVERY dispatch, run `git status`; any repo change caused by a dispatch
   is an automatic reject of that round and must be reverted before proceeding.
 - Never dispatch from a workspace containing secrets: agy has bypassed its own
   sandbox for filesystem reads.
-- Budget: 3 dispatch rounds per work order; after 2 rejections, write it
-  directly and note the exceeded budget in the commit.
+
+## Model routing (CEO-dictated)
+| Tier | Used for |
+|---|---|
+| agy (external CLI) | Test fixtures and data files ONLY |
+| Haiku worker subagent | Spec'd, self-contained new modules |
+| Sonnet (main session) | Integration, edits to existing modules, all judgment/money-adjacent code |
+| Opus (fable-gate subagent) | Verification Gate review before EVERY commit |
+
+- One-strike rule: a gate REJECT of cheap-tier output (agy or Haiku) escalates
+  directly to Sonnet — no corrective redispatch to the cheap tier.
+- Token levers: targeted tests while iterating; full suite only at the gate.
+  Recommend /clear between work orders.
 
 ## Verification Gate (all must pass before any commit)
 1. Full type hints; no bare excepts.
