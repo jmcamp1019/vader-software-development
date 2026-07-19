@@ -1,0 +1,116 @@
+{
+  "phase": "holdout",
+  "disclosure_start": "2025-07-01",
+  "disclosure_end": "2026-07-16",
+  "scoring_end": "2026-07-16",
+  "results": [
+    {
+      "key": "H1",
+      "label": "purchases-only",
+      "priced_trades": 1179,
+      "excess_low": 0.009431190128403877,
+      "excess_high": 0.0249589432236772,
+      "total_low": 0.06094214855399982,
+      "total_high": 0.07766807353936511,
+      "benchmark_low": 0.05151095842559594,
+      "benchmark_high": 0.05270913031568791,
+      "hit_low": 0.5419847328244275,
+      "hit_high": 0.5419847328244275,
+      "unpriced_trades": 20
+    },
+    {
+      "key": "H2",
+      "label": "fast-filers (<=15d)",
+      "priced_trades": 392,
+      "excess_low": 0.03365061668392588,
+      "excess_high": 0.038079294444949285,
+      "total_low": 0.08659611430203773,
+      "total_high": 0.09132820010293186,
+      "benchmark_low": 0.05294549761811185,
+      "benchmark_high": 0.05324890565798257,
+      "hit_low": 0.6147959183673469,
+      "hit_high": 0.6147959183673469,
+      "unpriced_trades": 7
+    },
+    {
+      "key": "H3",
+      "label": "conviction-size (min >= $50,000)",
+      "priced_trades": 51,
+      "excess_low": 0.02429823077852422,
+      "excess_high": 0.024823197539396213,
+      "total_low": 0.07757839459936866,
+      "total_high": 0.0785412718644547,
+      "benchmark_low": 0.05328016382084444,
+      "benchmark_high": 0.053718074325058485,
+      "hit_low": 0.7058823529411765,
+      "hit_high": 0.7058823529411765,
+      "unpriced_trades": 0
+    },
+    {
+      "key": "H4",
+      "label": "consensus (3 members / 30d)",
+      "priced_trades": 37,
+      "excess_low": 0.03912117855828101,
+      "excess_high": 0.06484100037729368,
+      "total_low": 0.08544383169809722,
+      "total_high": 0.11090756911274213,
+      "benchmark_low": 0.046066568735448454,
+      "benchmark_high": 0.046322653139816206,
+      "hit_low": 0.6756756756756757,
+      "hit_high": 0.6756756756756757,
+      "unpriced_trades": 0
+    },
+    {
+      "key": "H5-house",
+      "label": "chamber-split: house",
+      "priced_trades": 1179,
+      "excess_low": 0.009431190128403877,
+      "excess_high": 0.0249589432236772,
+      "total_low": 0.06094214855399982,
+      "total_high": 0.07766807353936511,
+      "benchmark_low": 0.05151095842559594,
+      "benchmark_high": 0.05270913031568791,
+      "hit_low": 0.5419847328244275,
+      "hit_high": 0.5419847328244275,
+      "unpriced_trades": 20
+    },
+    {
+      "key": "H5-senate",
+      "label": "chamber-split: senate",
+      "priced_trades": 0,
+      "excess_low": 0.0,
+      "excess_high": 0.0,
+      "total_low": 0.0,
+      "total_high": 0.0,
+      "benchmark_low": 0.0,
+      "benchmark_high": 0.0,
+      "hit_low": 0.0,
+      "hit_high": 0.0,
+      "unpriced_trades": 0
+    },
+    {
+      "key": "H6",
+      "label": "train top-decile skill cohort",
+      "priced_trades": 94,
+      "excess_low": 0.053953044372600845,
+      "excess_high": 0.056411161983057845,
+      "total_low": 0.1079093175365502,
+      "total_high": 0.10963174698915812,
+      "benchmark_low": 0.053220585006100274,
+      "benchmark_high": 0.05395627316394935,
+      "hit_low": 0.6808510638297872,
+      "hit_high": 0.6808510638297872,
+      "unpriced_trades": 0
+    }
+  ],
+  "h6_cohort_ids": [
+    8315,
+    8109,
+    8661
+  ],
+  "h6_cohort_names": [
+    "Byron Donalds",
+    "Cleo Fields",
+    "Virginia Foxx"
+  ]
+}
