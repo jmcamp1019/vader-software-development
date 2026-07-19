@@ -17,7 +17,11 @@ python -m pelositracker run --interval-hours 6
   scan is logged and the loop continues; the digest still runs, and
   `consecutive_failures=` in the log line tracks unhealthy streaks.
 - A `WARNING:` line fires when house quarantines exceed 2% of the cycle's
-  house records — the poisoned-mirror alarm. Treat it as an incident signal.
+  officially indexable house records — the poisoned-mirror alarm. Pre-2015
+  rows remain quarantined as `legacy_unindexed` but are excluded from both the
+  numerator and denominator because the official 2014 bulk archive has no PTR
+  coverage. Any unmatched 2015+ row still contributes to the alarm. Treat a
+  warning as an incident signal.
 - Single instance enforced via `<db>.runner.lock` (PID + heartbeat timestamp,
   rewritten each cycle). A lock with no heartbeat for two intervals is
   considered stale and stolen; delete the file manually only if you are sure
@@ -50,7 +54,7 @@ Notes:
 ## Log line format
 
 ```
-2026-07-19T12:00:00+00:00 senate ok inserted=3 duplicates=140 skipped=0 quarantined=0 | house ok inserted=12 duplicates=23486 skipped=2 quarantined=0 | shadow active examined=15 appended=2 rejected_backfills=1 | digest new=1 | consecutive_failures=0
+2026-07-19T16:53:29+00:00 senate ok inserted=0 duplicates=8030 skipped=0 quarantined=0 legacy_unindexed=0 | house ok inserted=0 duplicates=22676 skipped=160 quarantined=839 legacy_unindexed=839 | shadow not-started examined=0 appended=0 rejected_backfills=0 | digest new=0 | consecutive_failures=0
 ```
 
 A skipped source is reported as `<name> skipped`, a failed one as

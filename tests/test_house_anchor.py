@@ -4,12 +4,13 @@ from __future__ import annotations
 import io
 import sqlite3
 import unittest
+import unittest.mock
 import zipfile
 from typing import Any
 
 import _path  # noqa: F401
 
-from pelositracker import config, db
+from pelositracker import clerk, config, db
 from pelositracker.clerk import filing_year, parse_index_doc_ids
 from pelositracker.normalizer import (
     extract_filing_doc_id,
@@ -83,6 +84,33 @@ class ClerkIndexParsingTests(unittest.TestCase):
         record = _mirror_record(source_url="", disclosure_date="")
         self.assertIsNone(filing_year(record))
 
+    def test_legacy_unindexed_boundary_is_strictly_before_2015(self) -> None:
+        legacy = _mirror_record(
+            source_url="https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2014/20002288.pdf"
+        )
+        supported = _mirror_record(
+            source_url="https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2015/20003001.pdf"
+        )
+        self.assertTrue(clerk.is_legacy_unindexed_record(legacy))
+        self.assertFalse(clerk.is_legacy_unindexed_record(supported))
+
+    def test_bulk_index_fetch_skips_legacy_year_but_fetches_supported_year(self) -> None:
+        records = [
+            _mirror_record(
+                source_url="https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2014/20002288.pdf"
+            ),
+            _mirror_record(
+                source_url="https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2015/20003001.pdf"
+            ),
+        ]
+        with unittest.mock.patch(
+            "pelositracker.clerk.fetch_index_doc_ids", return_value={"20003001"}
+        ) as fetch:
+            self.assertEqual(
+                clerk.fetch_doc_ids_for_records(records), {"20003001"}
+            )
+        fetch.assert_called_once_with(2015, timeout=None)
+
 
 class HouseNormalizerGuardTests(unittest.TestCase):
     def test_mirror_source_url_field_supported(self) -> None:
@@ -141,6 +169,7 @@ class HouseIngestAnchorTests(unittest.TestCase):
         stats = ingest_house_records(self.conn, records, {"20034977"})
         self.assertEqual(stats.inserted, 1)
         self.assertEqual(stats.quarantined, 2)
+        self.assertEqual(stats.legacy_unindexed, 0)
         self.assertEqual(db.trade_count(self.conn), 1)
         evil = self.conn.execute("SELECT 1 FROM trades WHERE ticker = 'EVIL'").fetchone()
         self.assertIsNone(evil)
@@ -151,6 +180,39 @@ class HouseIngestAnchorTests(unittest.TestCase):
         self.assertEqual(stats.inserted, 0)
         self.assertEqual(stats.skipped, 1)
         self.assertEqual(stats.quarantined, 0)
+
+    def test_legacy_unindexed_trade_stays_quarantined_even_if_doc_id_is_supplied(self) -> None:
+        legacy = _mirror_record(
+            transaction_date="12/30/2014",
+            disclosure_date="12/30/2014",
+            filing_id="20002288",
+            source_url="https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2014/20002288.pdf",
+        )
+
+        stats = ingest_house_records(self.conn, [legacy], {"20002288"})
+
+        self.assertEqual(stats.total_records, 1)
+        self.assertEqual(stats.inserted, 0)
+        self.assertEqual(stats.quarantined, 1)
+        self.assertEqual(stats.legacy_unindexed, 1)
+        self.assertEqual(db.trade_count(self.conn), 0)
+
+    def test_unclassifiable_year_cannot_borrow_known_doc_id_from_union(self) -> None:
+        unclassifiable = _mirror_record(
+            disclosure_date="",
+            filing_id="20034977",
+            source_url="https://example.invalid/no-year/20034977.pdf",
+        )
+
+        stats = ingest_house_records(
+            self.conn, [unclassifiable], {"20034977"}
+        )
+
+        self.assertEqual(stats.inserted, 0)
+        self.assertEqual(stats.skipped, 0)
+        self.assertEqual(stats.quarantined, 1)
+        self.assertEqual(stats.legacy_unindexed, 0)
+        self.assertEqual(db.trade_count(self.conn), 0)
 
     def test_reingest_idempotent(self) -> None:
         ingest_house_records(self.conn, [_mirror_record()], {"20034977"})

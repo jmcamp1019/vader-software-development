@@ -5,7 +5,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from . import config, db
+from . import clerk, config, db
 from .normalizer import (
     NormalizedTrade,
     extract_filing_doc_id,
@@ -30,12 +30,14 @@ class IngestStats:
     duplicates: int = 0
     skipped: int = 0
     quarantined: int = 0
+    legacy_unindexed: int = 0
 
     def summary(self) -> str:
         return (
             f"[{self.chamber}] records={self.total_records} inserted={self.inserted} "
             f"duplicates={self.duplicates} skipped={self.skipped} "
-            f"quarantined={self.quarantined}"
+            f"quarantined={self.quarantined} "
+            f"legacy_unindexed={self.legacy_unindexed}"
         )
 
 
@@ -74,13 +76,25 @@ def ingest_house_records(
     """Ingest house mirror records anchored to the official Clerk index (ADR-001).
 
     A record whose filing DocID is missing or absent from the official index is
-    quarantined: counted, reported, never inserted. Records that pass the
-    anchor but fail normalization (artifacts, bad dates/amounts) are skipped.
+    quarantined: counted, reported, never inserted. Pre-2015 rows predate usable
+    PTR coverage in the official bulk index and remain quarantined under the
+    narrower legacy-unindexed count. Records that pass the anchor but fail
+    normalization (artifacts, bad dates/amounts) are skipped.
     """
     stats = IngestStats(chamber="house", total_records=len(records))
 
     normalized: list[NormalizedTrade] = []
     for record in records:
+        year = clerk.filing_year(record)
+        if year is None:
+            # A DocID from another fetched year must never anchor a record
+            # whose own filing year cannot be established.
+            stats.quarantined += 1
+            continue
+        if year < clerk.CLERK_PTR_INDEX_START_YEAR:
+            stats.quarantined += 1
+            stats.legacy_unindexed += 1
+            continue
         doc_id = extract_filing_doc_id(record)
         if doc_id is None or doc_id not in clerk_doc_ids:
             stats.quarantined += 1

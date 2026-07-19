@@ -110,6 +110,9 @@ class CycleResult:
     failures: int = 0
     house_records: int = 0
     house_quarantined: int = 0
+    house_tripwire_records: int = 0
+    house_tripwire_quarantined: int = 0
+    house_legacy_unindexed: int = 0
     shadow_segment: str = "shadow not-started examined=0 appended=0 rejected_backfills=0"
     digest_new: int = 0
     tripwire: bool = False
@@ -153,12 +156,20 @@ def run_cycle(
         result.source_segments.append(
             f"{name} ok inserted={stats.inserted} duplicates={stats.duplicates}"
             f" skipped={stats.skipped} quarantined={stats.quarantined}"
+            f" legacy_unindexed={stats.legacy_unindexed}"
         )
         if name == "house":
             result.house_records = stats.total_records
             result.house_quarantined = stats.quarantined
+            result.house_legacy_unindexed = stats.legacy_unindexed
+            result.house_tripwire_records = (
+                stats.total_records - stats.legacy_unindexed
+            )
+            result.house_tripwire_quarantined = (
+                stats.quarantined - stats.legacy_unindexed
+            )
     result.tripwire = quarantine_tripwire(
-        result.house_quarantined, result.house_records
+        result.house_tripwire_quarantined, result.house_tripwire_records
     )
     try:
         shadow_result = shadow_fn(conn)
@@ -181,12 +192,19 @@ def format_cycle_line(result: CycleResult, consecutive_failures: int) -> str:
 
 
 def format_tripwire_line(result: CycleResult) -> str:
-    share = 100.0 * result.house_quarantined / result.house_records
+    share = (
+        100.0 * result.house_tripwire_quarantined / result.house_tripwire_records
+    )
+    legacy_note = (
+        f"; legacy_unindexed={result.house_legacy_unindexed} excluded"
+        if result.house_legacy_unindexed
+        else ""
+    )
     return (
-        f"WARNING: house quarantined {result.house_quarantined}/"
-        f"{result.house_records} records ({share:.1f}%) exceeds the "
+        f"WARNING: house integrity quarantine {result.house_tripwire_quarantined}/"
+        f"{result.house_tripwire_records} supported records ({share:.1f}%) exceeds the "
         f"{QUARANTINE_TRIPWIRE_RATIO:.0%} tripwire — possible mirror compromise;"
-        " inspect before trusting new data"
+        f" inspect before trusting new data{legacy_note}"
     )
 
 

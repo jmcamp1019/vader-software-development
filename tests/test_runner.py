@@ -243,6 +243,60 @@ class TripwireTests(unittest.TestCase):
         self.assertIn("50.0%", warning)
         self.assertIn("mirror", warning)
 
+    def test_legacy_unindexed_quarantine_is_excluded_from_live_tripwire(self) -> None:
+        conn = db.connect(":memory:")
+        db.init_schema(conn)
+        result = run_cycle(
+            conn,
+            sources=[
+                (
+                    "house",
+                    lambda c: _stats(
+                        "house",
+                        total_records=23_675,
+                        duplicates=22_676,
+                        skipped=160,
+                        quarantined=839,
+                        legacy_unindexed=839,
+                    ),
+                )
+            ],
+            digest_fn=_no_digest,
+        )
+        conn.close()
+
+        self.assertFalse(result.tripwire)
+        self.assertEqual(result.house_quarantined, 839)
+        self.assertEqual(result.house_legacy_unindexed, 839)
+        self.assertEqual(result.house_tripwire_records, 22_836)
+        self.assertEqual(result.house_tripwire_quarantined, 0)
+        self.assertIn("quarantined=839 legacy_unindexed=839", result.source_segments[0])
+
+    def test_supported_unmatched_rows_still_trip_after_legacy_exclusion(self) -> None:
+        conn = db.connect(":memory:")
+        db.init_schema(conn)
+        result = run_cycle(
+            conn,
+            sources=[
+                (
+                    "house",
+                    lambda c: _stats(
+                        "house",
+                        total_records=1_000,
+                        quarantined=120,
+                        legacy_unindexed=100,
+                    ),
+                )
+            ],
+            digest_fn=_no_digest,
+        )
+        conn.close()
+
+        self.assertTrue(result.tripwire)  # 20 / 900 = 2.22%
+        warning = format_tripwire_line(result)
+        self.assertIn("20/900 supported records", warning)
+        self.assertIn("legacy_unindexed=100 excluded", warning)
+
 
 class IntervalTests(unittest.TestCase):
     def test_cli_value_wins(self) -> None:

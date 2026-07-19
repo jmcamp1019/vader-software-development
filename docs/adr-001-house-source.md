@@ -122,6 +122,19 @@ A new open-data project (explicitly created because the original died):
   operation. Added as an additive migration; pre-existing rows are backfilled
   by chamber (source and chamber were 1:1 before this ADR).
 
+- **AMENDMENT — legacy bulk-index coverage boundary (verified 2026-07-19).**
+  The currently published `2014FD.zip` contains only 11 filings and no
+  FilingType `P` (PTR) rows; the mirror's 839 transactions from 229 distinct
+  2014 PTR DocIDs therefore cannot be corroborated through that bulk index.
+  `2015FD.zip` is the first usable PTR archive (2,297 filings, including 728
+  type `P`), and every mirror DocID from 2015 through 2026 matched its official
+  yearly index during the live investigation. Pre-2015 mirror rows remain
+  untrusted, counted, quarantined, and never inserted. They are labeled
+  `legacy_unindexed` and excluded from both sides of the live-integrity
+  quarantine ratio so this fixed historical coverage gap cannot trip every
+  current cycle. Unmatched rows from 2015 onward, and rows whose year cannot
+  be established, remain in the tripwire exactly as before.
+
 - **Fallback: the official House Clerk yearly ZIP index** (already fetched on
   every ingest as the anchor). If the mirror goes stale or dies, the Clerk
   filing index (filer, disclosure date, PTR PDF link) is authoritative and
@@ -141,8 +154,8 @@ A new open-data project (explicitly created because the original died):
 - New `clerk.py` module fetches and parses the official index; the pipeline
   gains a quarantine path and per-source provenance; `db.py` gains an additive
   `provenance` column migration and a purge helper.
-- Every house ingest costs one extra small HTTP request per filing year
-  (~50–100 KB each) against the official Clerk endpoint.
+- Every house ingest costs one extra small HTTP request per supported filing
+  year (2015 onward) against the official Clerk endpoint.
 - The normalizer gains row-validation guards (artifact rejection) — slightly
   lower row yield, in exchange for gate-clean data.
 - We accept a bus-factor risk on the mirror, mitigated by the Clerk anchor

@@ -2,9 +2,11 @@
 
 Per ADR-001, mirror trades are only inserted when their filing DocID appears
 in the Clerk's official yearly index ({YEAR}FD.zip, containing a tab-separated
-index of every filing). A year whose index is missing upstream (HTTP 404)
-yields an empty DocID set, so that year's trades quarantine; any other fetch
-failure propagates so the caller can fail closed.
+index of every filing). The official bulk archive has usable PTR coverage from
+2015 onward; older mirror rows remain quarantined as legacy-unindexed. A
+supported year whose index is missing upstream (HTTP 404) yields an empty
+DocID set, so that year's trades quarantine; any other fetch failure propagates
+so the caller can fail closed.
 """
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ from typing import Any, Iterable
 from . import config
 
 _PTR_YEAR_PATTERN = re.compile(r"/(?:ptr|financial)-pdfs/(\d{4})/")
+CLERK_PTR_INDEX_START_YEAR = 2015
 
 
 def parse_index_doc_ids(zip_payload: bytes) -> set[str]:
@@ -83,11 +86,21 @@ def filing_year(record: dict[str, Any]) -> int | None:
     return int(year_match.group(1)) if year_match else None
 
 
+def is_legacy_unindexed_record(record: dict[str, Any]) -> bool:
+    """True only for years before the official bulk index carries PTRs."""
+    year = filing_year(record)
+    return year is not None and year < CLERK_PTR_INDEX_START_YEAR
+
+
 def fetch_doc_ids_for_records(
     records: Iterable[dict[str, Any]], timeout: int | None = None
 ) -> set[str]:
-    """Fetch the union of official DocIDs for every filing year in the feed."""
-    years = {year for year in (filing_year(r) for r in records) if year is not None}
+    """Fetch official DocIDs for years with supported bulk PTR coverage."""
+    years = {
+        year
+        for year in (filing_year(record) for record in records)
+        if year is not None and year >= CLERK_PTR_INDEX_START_YEAR
+    }
     doc_ids: set[str] = set()
     for year in sorted(years):
         doc_ids |= fetch_index_doc_ids(year, timeout=timeout)

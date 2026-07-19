@@ -70,6 +70,13 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
                     "matching filing in the official House Clerk index (not inserted)",
                     file=sys.stderr,
                 )
+            if stats.legacy_unindexed:
+                print(
+                    f"{stats.legacy_unindexed} quarantined trade(s) predate usable "
+                    "official bulk PTR index coverage and are excluded from the "
+                    "live-integrity tripwire",
+                    file=sys.stderr,
+                )
         else:  # senate
             filings = fetcher.fetch_json(config.SENATE_DAILY_SUMMARIES_URL)
             print(
