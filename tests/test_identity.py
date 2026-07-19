@@ -6,7 +6,10 @@ import unittest
 import _path  # noqa: F401
 
 from pelositracker import db, watchlists
-from pelositracker.normalizer import canonical_politician_name
+from pelositracker.normalizer import (
+    canonical_politician_name,
+    display_politician_name,
+)
 
 
 class CanonicalNameTests(unittest.TestCase):
@@ -164,6 +167,77 @@ class IdentityMigrationTests(unittest.TestCase):
             "SELECT COUNT(*) AS n FROM watchlists WHERE kind = 'politician'"
         ).fetchone()
         self.assertEqual(rows["n"], 1)
+
+
+class DisplayNameTests(unittest.TestCase):
+    def test_repairs_mangled_spellings_keeping_case(self) -> None:
+        self.assertEqual(
+            display_politician_name("Zed Zed Placeholder"), "Zed Placeholder"
+        )
+        self.assertEqual(
+            display_politician_name("Testa Ann Mrs Fixture"), "Testa Ann Fixture"
+        )
+        self.assertEqual(
+            display_politician_name("Testa Patrick MD, FACS Fixture"),
+            "Testa Patrick Fixture",
+        )
+
+    def test_clean_names_and_initials_untouched(self) -> None:
+        self.assertEqual(
+            display_politician_name("Q. Zed Placeholder"), "Q. Zed Placeholder"
+        )
+
+    def test_all_dropped_falls_back_to_input(self) -> None:
+        self.assertEqual(display_politician_name("Dr."), "Dr.")
+
+
+class DisplayRepairMigrationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.conn = db.connect(":memory:")
+        db.init_schema(self.conn)
+
+    def tearDown(self) -> None:
+        self.conn.close()
+
+    def _raw_insert(self, full_name: str, chamber: str) -> int:
+        cursor = self.conn.execute(
+            "INSERT INTO politicians (full_name, chamber) VALUES (?, ?)",
+            (full_name, chamber),
+        )
+        assert cursor.lastrowid is not None
+        return int(cursor.lastrowid)
+
+    def test_survivor_display_name_repaired(self) -> None:
+        pid = self._raw_insert("Zed Zed Placeholder", "senate")
+        db.init_schema(self.conn)
+        row = self.conn.execute(
+            "SELECT full_name FROM politicians WHERE id = ?", (pid,)
+        ).fetchone()
+        self.assertEqual(row["full_name"], "Zed Placeholder")
+
+    def test_credentials_variant_collision_merges(self) -> None:
+        # Different canonical keys (credentials are NOT in the canonical
+        # filter), so passes 1-2 keep both; pass 3's repair collides and merges.
+        keep = self._raw_insert("Testa Patrick Fixture", "house")
+        dupe = self._raw_insert("Testa Patrick MD, FACS Fixture", "house")
+        _add_trade(self.conn, keep, "d1")
+        _add_trade(self.conn, dupe, "d2")
+        db.init_schema(self.conn)
+        self.assertEqual(db.politician_count(self.conn), 1)
+        rows = self.conn.execute(
+            "SELECT COUNT(*) AS n FROM trades WHERE politician_id = ?", (keep,)
+        ).fetchone()
+        self.assertEqual(rows["n"], 2)
+
+    def test_repair_idempotent(self) -> None:
+        pid = self._raw_insert("Zed Zed Placeholder", "senate")
+        db.init_schema(self.conn)
+        db.init_schema(self.conn)
+        row = self.conn.execute(
+            "SELECT full_name FROM politicians WHERE id = ?", (pid,)
+        ).fetchone()
+        self.assertEqual(row["full_name"], "Zed Placeholder")
+        self.assertEqual(db.politician_count(self.conn), 1)
 
 
 if __name__ == "__main__":

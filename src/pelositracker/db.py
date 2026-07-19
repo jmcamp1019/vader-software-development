@@ -9,7 +9,11 @@ import sqlite3
 from pathlib import Path
 from typing import Iterable
 
-from .normalizer import NormalizedTrade, canonical_politician_name
+from .normalizer import (
+    NormalizedTrade,
+    canonical_politician_name,
+    display_politician_name,
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS politicians (
@@ -165,6 +169,39 @@ def _migrate_politician_identity(conn: sqlite3.Connection) -> None:
         survivor = ids[0]
         for dupe in ids[1:]:
             _repoint_politician(conn, dupe, survivor)
+
+    # Pass 3: repair survivor display names ("Scott Scott Franklin" ->
+    # "Scott Franklin"). When the repaired spelling already names another row
+    # in the same chamber, the two are a credentials-variant duplicate
+    # ("Neal Patrick MD, FACS Dunn" vs "Neal Patrick Dunn") and merge.
+    for row in conn.execute(
+        "SELECT id, full_name, chamber FROM politicians"
+    ).fetchall():
+        pid = int(row["id"])
+        if conn.execute(
+            "SELECT 1 FROM politicians WHERE id = ?", (pid,)
+        ).fetchone() is None:
+            continue  # merged away earlier in this pass
+        repaired = display_politician_name(str(row["full_name"]))
+        if repaired == str(row["full_name"]):
+            continue
+        clash = conn.execute(
+            "SELECT id FROM politicians WHERE full_name = ? AND chamber = ?"
+            " AND id != ?",
+            (repaired, row["chamber"], pid),
+        ).fetchone()
+        if clash is not None:
+            survivor, dupe = sorted((pid, int(clash["id"])))
+            _repoint_politician(conn, dupe, survivor)
+            conn.execute(
+                "UPDATE politicians SET full_name = ? WHERE id = ?",
+                (repaired, survivor),
+            )
+        else:
+            conn.execute(
+                "UPDATE politicians SET full_name = ? WHERE id = ?",
+                (repaired, pid),
+            )
 
 
 def _migrate_provenance(conn: sqlite3.Connection) -> None:

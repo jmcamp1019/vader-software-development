@@ -311,3 +311,27 @@ def canonical_politician_name(full_name: str) -> str:
             continue
         out.append(token)
     return " ".join(out)
+
+
+# Professional credentials that appear inside source spellings ("Neal Patrick
+# MD, FACS Dunn"). Display-only: NOT part of the canonical key, which must stay
+# stable for stored politician_aliases rows.
+_CREDENTIAL_TOKENS = frozenset({"md", "facs", "phd", "dds", "dvm", "esq", "cpa"})
+
+
+def display_politician_name(full_name: str) -> str:
+    """Human-facing repair of a source spelling; identity is NOT derived here.
+
+    Drops honorific and credential tokens, collapses adjacent duplicates, and
+    keeps the original casing of what remains ("Scott Scott Franklin" ->
+    "Scott Franklin"). Falls back to the input if everything would be dropped.
+    """
+    out: list[str] = []
+    for raw in full_name.split():
+        token = raw.strip(".,").casefold()
+        if not token or token in _HONORIFIC_TOKENS or token in _CREDENTIAL_TOKENS:
+            continue
+        if out and token == out[-1].strip(".,").casefold():
+            continue
+        out.append(raw.strip(","))
+    return " ".join(out) or full_name
