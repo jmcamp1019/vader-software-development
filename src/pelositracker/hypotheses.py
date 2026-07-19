@@ -350,19 +350,36 @@ def read_artifact(path: Path) -> BatteryArtifact:
 
 
 def artifact_is_committed(path: Path, repo_root: Path | None = None) -> bool:
-    """True only when HEAD contains byte-for-byte the artifact being read."""
+    """True when HEAD contains this artifact after Git clean filters.
+
+    `git hash-object --path` applies the repository's configured clean filter,
+    so Windows CRLF checkout conversion cannot falsely reject an otherwise
+    identical committed JSON artifact.
+    """
     root = (repo_root or Path.cwd()).resolve()
     try:
         relative = path.resolve().relative_to(root).as_posix()
     except ValueError:
         return False
-    result = subprocess.run(
-        ["git", "show", f"HEAD:{relative}"],
+    head = subprocess.run(
+        ["git", "rev-parse", f"HEAD:{relative}"],
         cwd=root,
         capture_output=True,
         check=False,
+        text=True,
     )
-    return result.returncode == 0 and result.stdout == path.read_bytes()
+    working = subprocess.run(
+        ["git", "hash-object", "--path", relative, str(path)],
+        cwd=root,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    return (
+        head.returncode == 0
+        and working.returncode == 0
+        and head.stdout.strip() == working.stdout.strip()
+    )
 
 
 def reserve_holdout(output_dir: Path, latest: str) -> Path:

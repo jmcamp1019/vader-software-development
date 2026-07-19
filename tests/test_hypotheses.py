@@ -254,12 +254,19 @@ class ArtifactAndPassTests(unittest.TestCase):
             artifact = root / "reports" / hypotheses.TRAIN_ARTIFACT
             artifact.parent.mkdir()
             artifact.write_text("local", encoding="utf-8")
-            completed = unittest.mock.Mock(returncode=0, stdout=b"committed")
+            head = unittest.mock.Mock(returncode=0, stdout="abc123\n")
+            mismatch = unittest.mock.Mock(returncode=0, stdout="def456\n")
+            match = unittest.mock.Mock(returncode=0, stdout="abc123\n")
             with unittest.mock.patch(
-                "pelositracker.hypotheses.subprocess.run", return_value=completed
-            ):
+                "pelositracker.hypotheses.subprocess.run",
+                side_effect=[head, mismatch],
+            ) as run:
                 self.assertFalse(hypotheses.artifact_is_committed(artifact, root))
-                artifact.write_bytes(b"committed")
+                self.assertEqual(run.call_count, 2)
+            with unittest.mock.patch(
+                "pelositracker.hypotheses.subprocess.run",
+                side_effect=[head, match],
+            ):
                 self.assertTrue(hypotheses.artifact_is_committed(artifact, root))
 
     def test_holdout_reservation_is_fixed_and_exclusive(self) -> None:
