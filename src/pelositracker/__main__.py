@@ -15,7 +15,19 @@ import urllib.error
 from pathlib import Path
 from typing import Any
 
-from . import api, backtest, clerk, config, db, digest, fetcher, prices, runner, watchlists
+from . import (
+    api,
+    backtest,
+    clerk,
+    config,
+    db,
+    digest,
+    fetcher,
+    hypotheses,
+    prices,
+    runner,
+    watchlists,
+)
 from .api import DISCLAIMER
 from .pipeline import ingest_house_records, ingest_records, ingest_senate_filings
 
@@ -234,6 +246,48 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_hypothesis_battery(args: argparse.Namespace) -> int:
+    """Run one pre-registered battery phase; holdout artifacts are write-once."""
+    output_dir = Path(args.output_dir)
+    train_json = output_dir / hypotheses.TRAIN_ARTIFACT
+    conn = db.connect(args.db)
+    try:
+        db.init_schema(conn)
+        if args.phase == "train":
+            train_md = output_dir / "hypothesis-battery-train-2025-06-30.md"
+            if train_json.exists() or train_md.exists():
+                raise ValueError("train artifact already exists; refusing to recompute")
+            artifact = hypotheses.run_train(conn)
+            hypotheses.write_artifact(train_json, artifact)
+            train_md.parent.mkdir(parents=True, exist_ok=True)
+            train_md.write_text(
+                hypotheses.format_train_report(artifact), encoding="utf-8"
+            )
+            print(hypotheses.format_train_report(artifact))
+            return 0
+
+        if not train_json.exists():
+            raise ValueError("committed train artifact is required before holdout")
+        if not hypotheses.artifact_is_committed(train_json):
+            raise ValueError(
+                "train artifact must match the byte-for-byte version committed in HEAD"
+            )
+        train = hypotheses.read_artifact(train_json)
+        latest = hypotheses.latest_price_date(conn)
+        holdout_json = output_dir / f"hypothesis-battery-holdout-{latest}.json"
+        full_md = output_dir / f"hypothesis-battery-{latest}.md"
+        hypotheses.reserve_holdout(output_dir, latest)
+        holdout = hypotheses.run_holdout(conn, train, latest)
+        hypotheses.write_artifact(holdout_json, holdout)
+        full_md.parent.mkdir(parents=True, exist_ok=True)
+        report = hypotheses.format_full_report(train, holdout)
+        full_md.write_text(report, encoding="utf-8")
+        print(report)
+        return 0
+    finally:
+        conn.close()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pelositracker")
     parser.add_argument("--db", default=config.DEFAULT_DB_PATH, help="SQLite database path")
@@ -310,6 +364,13 @@ def main(argv: list[str] | None = None) -> int:
         "--cost-bps", type=int, default=backtest.DEFAULT_COST_BPS
     )
     leaderboard_parser.set_defaults(func=_cmd_leaderboard)
+
+    battery_parser = subparsers.add_parser(
+        "hypothesis-battery", help="WO-8 pre-registered train/holdout battery"
+    )
+    battery_parser.add_argument("phase", choices=("train", "holdout"))
+    battery_parser.add_argument("--output-dir", default="reports")
+    battery_parser.set_defaults(func=_cmd_hypothesis_battery)
 
     args = parser.parse_args(argv)
     return int(args.func(args))
