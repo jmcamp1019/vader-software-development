@@ -38,11 +38,16 @@ and the WO-7 explicit non-goals. ADR-002's price source remains approved for
 local research only, and this decision removes the near-term reason to
 procure a licensed feed.
 
-The sole sanctioned follow-up is WO-8 (docs/batch5_wo8.md): a PRE-REGISTERED
-six-hypothesis battery with a single-evaluation holdout and a CEO-signed pass
-bar. Its failure clause is binding — if no hypothesis passes, that finding is
-recorded here as confirmatory and strategy search ends. Search-until-pass
-data mining is prohibited regardless of backtested numbers.
+WO-8 (docs/batch5_wo8.md) completed its pre-registered, single-evaluation
+holdout. H2 — purchases disclosed within 15 calendar days of transaction —
+was the one registered pass. That pass did not authorize Phase B, hypothetical
+orders, paper trading, live trading, or any integration that can transact.
+
+The sole authorized follow-on is WO-9 (docs/batch6_wo9.md): one fixed 90-day
+prospective shadow-tracking campaign that records H2 disclosure observations
+only. It may preserve the public disclosure cohort and scan audit; it may not
+model orders, balances, positions, or returns. No other strategy search or
+operational phase is authorized by the WO-8 result.
 
 ## Re-test triggers (exhaustive)
 

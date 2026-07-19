@@ -1,6 +1,6 @@
 """Scheduled ingest runner: keeps the database fresh without manual commands.
 
-Each cycle runs senate ingest -> house ingest -> digest and emits one
+Each cycle runs senate ingest -> house ingest -> shadow scan -> digest and emits one
 structured log line. A failing source is logged and never kills the runner;
 the house source keeps its fail-closed semantics (Clerk index unavailable ->
 that source fails for the cycle, nothing inserted). A cycle result is never
@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from . import clerk, config, db, fetcher
+from . import clerk, config, db, fetcher, shadow
 from .digest import DigestResult, run_digest
 from .pipeline import IngestStats, ingest_house_records, ingest_senate_filings
 
@@ -31,6 +31,7 @@ QUARANTINE_TRIPWIRE_RATIO = 0.02
 
 SourceFn = Callable[[sqlite3.Connection], "IngestStats | None"]
 DigestFn = Callable[[sqlite3.Connection], DigestResult]
+ShadowFn = Callable[[sqlite3.Connection], shadow.ScanResult]
 
 
 # --- single-instance lock -------------------------------------------------
@@ -109,6 +110,7 @@ class CycleResult:
     failures: int = 0
     house_records: int = 0
     house_quarantined: int = 0
+    shadow_segment: str = "shadow not-started examined=0 appended=0 rejected_backfills=0"
     digest_new: int = 0
     tripwire: bool = False
 
@@ -126,12 +128,15 @@ def run_cycle(
     conn: sqlite3.Connection,
     sources: list[tuple[str, SourceFn]] | None = None,
     digest_fn: DigestFn | None = None,
+    shadow_fn: ShadowFn | None = None,
 ) -> CycleResult:
-    """One senate -> house -> digest pass. Never raises for a source failure."""
+    """One ingest -> shadow -> digest pass with isolated source/shadow failures."""
     if sources is None:
         sources = default_sources()
     if digest_fn is None:
         digest_fn = run_digest
+    if shadow_fn is None:
+        shadow_fn = shadow.scan
 
     result = CycleResult(started=_utc_now_iso())
     db.init_schema(conn)
@@ -155,13 +160,20 @@ def run_cycle(
     result.tripwire = quarantine_tripwire(
         result.house_quarantined, result.house_records
     )
+    try:
+        shadow_result = shadow_fn(conn)
+    except (sqlite3.Error, ValueError, KeyError, TypeError) as exc:
+        result.failures += 1
+        result.shadow_segment = f"shadow FAILED ({exc})"
+    else:
+        result.shadow_segment = shadow.format_scan_segment(shadow_result)
     digest_result = digest_fn(conn)
     result.digest_new = digest_result.new_trades
     return result
 
 
 def format_cycle_line(result: CycleResult, consecutive_failures: int) -> str:
-    segments = " | ".join(result.source_segments)
+    segments = " | ".join([*result.source_segments, result.shadow_segment])
     return (
         f"{result.started} {segments} | digest new={result.digest_new}"
         f" | consecutive_failures={consecutive_failures}"

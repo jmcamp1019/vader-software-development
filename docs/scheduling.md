@@ -11,9 +11,10 @@ python -m pelositracker run --interval-hours 6
 
 - Interval precedence: `--interval-hours` flag, then `PT_RUN_INTERVAL_HOURS`
   env var, then the default of 6.
-- Each cycle: senate ingest → house ingest → digest, one structured log line
-  per cycle. A failing source (including the house fail-closed path when the
-  official Clerk index is unreachable) is logged and the loop continues;
+- Each cycle: senate ingest → house ingest → WO-9 shadow scan → digest, one
+  structured log line per cycle. A failing source (including the house
+  fail-closed path when the official Clerk index is unreachable) or shadow
+  scan is logged and the loop continues; the digest still runs, and
   `consecutive_failures=` in the log line tracks unhealthy streaks.
 - A `WARNING:` line fires when house quarantines exceed 2% of the cycle's
   house records — the poisoned-mirror alarm. Treat it as an incident signal.
@@ -49,8 +50,9 @@ Notes:
 ## Log line format
 
 ```
-2026-07-16T12:00:00+00:00 senate ok inserted=3 duplicates=140 skipped=0 quarantined=0 | house ok inserted=12 duplicates=23486 skipped=2 quarantined=0 | digest new=1 | consecutive_failures=0
+2026-07-19T12:00:00+00:00 senate ok inserted=3 duplicates=140 skipped=0 quarantined=0 | house ok inserted=12 duplicates=23486 skipped=2 quarantined=0 | shadow active examined=15 appended=2 rejected_backfills=1 | digest new=1 | consecutive_failures=0
 ```
 
 A skipped source is reported as `<name> skipped`, a failed one as
-`<name> FAILED (<reason>)` — a cycle result is never fabricated.
+`<name> FAILED (<reason>)` — a cycle result is never fabricated. The shadow
+segment reports `not-started`, `active`, `completed`, or `FAILED` separately.

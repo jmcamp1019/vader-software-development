@@ -5,6 +5,7 @@ Usage:
     python -m pelositracker ingest --source house
     python -m pelositracker ingest --source senate
     python -m pelositracker stats [--db pelositracker.db]
+    python -m pelositracker shadow {start,scan,status}
     python -m pelositracker serve
 """
 from __future__ import annotations
@@ -26,6 +27,7 @@ from . import (
     hypotheses,
     prices,
     runner,
+    shadow,
     watchlists,
 )
 from .api import DISCLAIMER
@@ -241,6 +243,47 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return runner.run_loop(args.db, interval, once=args.once)
 
 
+def _print_shadow_status(snapshot: shadow.ShadowStatus) -> None:
+    print(f"status={snapshot.status}")
+    if snapshot.strategy_key is not None:
+        print(
+            f"strategy={snapshot.strategy_key} version={snapshot.strategy_version}"
+        )
+        print(f"activation_utc={snapshot.activation_utc}")
+        print(f"scheduled_end_utc={snapshot.scheduled_end_utc}")
+        print(
+            "activation_trade_id_boundary="
+            f"{snapshot.activation_trade_id_boundary}"
+        )
+        print(f"last_scanned_trade_id={snapshot.last_scanned_trade_id}")
+        print(f"completed_utc={snapshot.completed_utc or '-'}")
+    print(f"scans={snapshot.scan_count} signals={snapshot.signal_count}")
+    print(DISCLAIMER)
+
+
+def _cmd_shadow(args: argparse.Namespace) -> int:
+    conn = db.connect(args.db)
+    try:
+        db.init_schema(conn)
+        if args.shadow_command == "start":
+            try:
+                snapshot = shadow.start(conn)
+            except ValueError as exc:
+                print(exc, file=sys.stderr)
+                return 1
+            _print_shadow_status(snapshot)
+            return 0
+        if args.shadow_command == "scan":
+            result = shadow.scan(conn)
+            print(shadow.format_scan_segment(result))
+            print(DISCLAIMER)
+            return 0
+        _print_shadow_status(shadow.get_status(conn))
+        return 0
+    finally:
+        conn.close()
+
+
 def _cmd_serve(args: argparse.Namespace) -> int:
     api.serve(args.db)
     return 0
@@ -334,6 +377,14 @@ def main(argv: list[str] | None = None) -> int:
         "--once", action="store_true", help="Run a single cycle and exit"
     )
     run_parser.set_defaults(func=_cmd_run)
+
+    shadow_parser = subparsers.add_parser(
+        "shadow", help="Manage the WO-9 prospective H2 disclosure campaign"
+    )
+    shadow_parser.add_argument(
+        "shadow_command", choices=("start", "scan", "status")
+    )
+    shadow_parser.set_defaults(func=_cmd_shadow)
 
     backtest_parser = subparsers.add_parser(
         "backtest", help="Hypothetical copy-trading backtest (banded, vs SPY)"

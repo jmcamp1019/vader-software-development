@@ -25,6 +25,7 @@ from pelositracker.runner import (
     resolve_interval_hours,
     run_cycle,
 )
+from pelositracker.shadow import ScanResult
 
 
 def _stats(chamber: str, **overrides: int) -> IngestStats:
@@ -150,6 +151,69 @@ class CycleTests(unittest.TestCase):
         )
         self.assertEqual(calls, ["senate", "digest"])
         self.assertEqual(result.digest_new, 3)
+
+    def test_runner_orders_ingest_then_shadow_then_digest(self) -> None:
+        calls: list[str] = []
+
+        def shadow_spy(conn: sqlite3.Connection) -> ScanResult:
+            calls.append("shadow")
+            return ScanResult("active", "2026-07-19T12:00:00+00:00", 0, 0, 0, 0, 0)
+
+        def digest_spy(conn: sqlite3.Connection) -> DigestResult:
+            calls.append("digest")
+            return _no_digest(conn)
+
+        result = run_cycle(
+            self.conn,
+            sources=[
+                ("senate", lambda conn: calls.append("senate") or _stats("senate")),
+                ("house", lambda conn: calls.append("house") or _stats("house")),
+            ],
+            shadow_fn=shadow_spy,
+            digest_fn=digest_spy,
+        )
+
+        self.assertEqual(calls, ["senate", "house", "shadow", "digest"])
+        self.assertIn("shadow active", result.shadow_segment)
+
+    def test_not_started_shadow_is_reported_honestly(self) -> None:
+        result = run_cycle(self.conn, sources=[], digest_fn=_no_digest)
+        self.assertEqual(result.failures, 0)
+        self.assertIn("shadow not-started", result.shadow_segment)
+        self.assertIn("shadow not-started", format_cycle_line(result, 0))
+
+    def test_shadow_failure_is_counted_and_digest_still_runs(self) -> None:
+        calls: list[str] = []
+
+        def shadow_fails(conn: sqlite3.Connection) -> ScanResult:
+            calls.append("shadow")
+            raise sqlite3.OperationalError("fictional shadow fault")
+
+        def digest_spy(conn: sqlite3.Connection) -> DigestResult:
+            calls.append("digest")
+            return _no_digest(conn)
+
+        result = run_cycle(
+            self.conn,
+            sources=[],
+            shadow_fn=shadow_fails,
+            digest_fn=digest_spy,
+        )
+
+        self.assertEqual(calls, ["shadow", "digest"])
+        self.assertEqual(result.failures, 1)
+        self.assertEqual(result.shadow_segment, "shadow FAILED (fictional shadow fault)")
+
+    def test_completed_shadow_has_distinct_structured_status(self) -> None:
+        def completed(conn: sqlite3.Connection) -> ScanResult:
+            return ScanResult(
+                "completed", "2026-10-17T12:00:00+00:00", 9, 9, 0, 0, 0
+            )
+
+        result = run_cycle(
+            self.conn, sources=[], shadow_fn=completed, digest_fn=_no_digest
+        )
+        self.assertIn("shadow completed", result.shadow_segment)
 
 
 class TripwireTests(unittest.TestCase):

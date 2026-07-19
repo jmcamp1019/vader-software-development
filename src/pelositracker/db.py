@@ -63,6 +63,11 @@ def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     _migrate_provenance(conn)
     _migrate_politician_identity(conn)
+    # Imported here to keep the core schema and the additive WO-9 campaign
+    # schema separately owned without a module import cycle.
+    from . import shadow
+
+    shadow.init_schema(conn)
     conn.commit()
 
 

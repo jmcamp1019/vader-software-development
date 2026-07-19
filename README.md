@@ -13,6 +13,21 @@ python -m pelositracker ingest --source senate     # pull live Senate data
 python -m pelositracker stats                       # database summary
 ```
 
+## WO-9 prospective shadow tracking
+
+Activation is one-time and permanently baselines every existing trade ID.
+Inspect status before activating the authorized 90-day H2 campaign:
+
+```
+python -m pelositracker shadow status
+python -m pelositracker shadow start
+python -m pelositracker shadow scan
+```
+
+The scheduled runner scans automatically after Senate and House ingestion and
+before the digest. Signals are append-only disclosure snapshots, not orders or
+position simulations.
+
 ## Design notes
 - Disclosed amounts are ranges; stored as integer-cent min/max, open-ended max = NULL.
   They are never collapsed to point estimates anywhere in the pipeline.
